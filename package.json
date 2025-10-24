@@ -59,6 +59,6 @@
     "prepublishOnly": "npm run build",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "changeset publish"
+    "release": "changeset publish --provenance --access public"
   }
 }
