@@ -1,0 +1,26 @@
+# Source files (we only publish dist/)
+src/
+tsconfig.json
+
+# Development
+.github/
+.vscode/
+.idea/
+
+# Testing
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+jest.config.js
+coverage/
+
+# Documentation
+CONTRIBUTING.md
+.editorconfig
+
+# Misc
+.DS_Store
+*.log
+
