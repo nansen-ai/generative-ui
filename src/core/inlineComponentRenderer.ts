@@ -5,8 +5,6 @@
  * we manually split text and inject components inline.
  */
 
-import React from 'react';
-import { Text } from 'react-native';
 import { ComponentInstance } from './types';
 
 /**

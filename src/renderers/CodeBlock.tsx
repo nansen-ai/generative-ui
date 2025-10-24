@@ -28,7 +28,6 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ code, language, theme }) =
 
   const isDark = theme === 'dark';
   const backgroundColor = isDark ? '#101A29' : '#f5f5f5';
-  const textColor = isDark ? '#A7BEE6' : '#666666';
   const borderColor = isDark ? '#1a2433' : '#e8e8e8'; // Barely lighter than background
   const headerBg = isDark ? '#0d1520' : '#ececec';
   const headerText = isDark ? '#8C9DB8' : '#666666';

@@ -16,7 +16,6 @@ interface MarkdownRendererProps {
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   children,
-  theme = 'dark',
   style,
   rules = {},
 }) => {

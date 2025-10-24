@@ -1,5 +1,5 @@
 import { ComponentType } from 'react';
-import { TextStyle, ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
 
 /**
  * Component registry interface - matches existing registry structure
