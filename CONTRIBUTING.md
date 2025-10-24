@@ -118,5 +118,5 @@ We welcome feature requests! Please:
 
 ## License
 
-By contributing to StreamdownRN, you agree that your contributions will be licensed under the MIT License.
+By contributing to StreamdownRN, you agree that your contributions will be licensed under the Apache License 2.0.
 
