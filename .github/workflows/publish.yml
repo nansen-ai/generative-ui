@@ -39,7 +39,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: npm run release
+          publish: npm publish --provenance --access public
           version: npm run version
           commit: 'chore: version packages'
           title: 'chore: version packages'
