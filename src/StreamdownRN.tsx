@@ -18,33 +18,39 @@ import { CodeBlock } from './renderers/CodeBlock';
 import { TableWrapper } from './renderers/TableWrapper';
 
 /**
- * Get theme configuration
+ * Get theme configuration with optional style overrides
  */
-function getTheme(theme: StreamdownRNProps['theme']): {
+function getTheme(
+  theme: StreamdownRNProps['theme'],
+  styleOverrides?: Partial<Record<string, any>>
+): {
   config: ThemeConfig;
   markdownStyles: any;
 } {
+  let baseConfig: ThemeConfig;
+  let baseMarkdownStyles: any;
+  
   if (typeof theme === 'object') {
-    // Custom theme object - uses dark styles as base
-    return {
-      config: theme,
-      markdownStyles: darkMarkdownStyles,
-    };
+    // Custom theme object - use light styles as base (more neutral)
+    baseConfig = theme;
+    baseMarkdownStyles = lightMarkdownStyles;
+  } else if (theme === 'light') {
+    baseConfig = lightTheme;
+    baseMarkdownStyles = lightMarkdownStyles;
+  } else {
+    baseConfig = darkTheme;
+    baseMarkdownStyles = darkMarkdownStyles;
   }
   
-  switch (theme) {
-    case 'light':
-      return {
-        config: lightTheme,
-        markdownStyles: lightMarkdownStyles,
-      };
-    case 'dark':
-    default:
-      return {
-        config: darkTheme,
-        markdownStyles: darkMarkdownStyles,
-      };
-  }
+  // Deep merge style overrides
+  const mergedStyles = styleOverrides
+    ? { ...baseMarkdownStyles, ...styleOverrides }
+    : baseMarkdownStyles;
+  
+  return {
+    config: baseConfig,
+    markdownStyles: mergedStyles,
+  };
 }
 
 /**
@@ -54,6 +60,7 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
   children,
   componentRegistry,
   theme = 'dark',
+  styleOverrides,
   onComponentError,
   style,
 }) => {
@@ -88,10 +95,10 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
     return result;
   }, [children, componentRegistry, onComponentError]);
 
-  // Get theme configuration
+  // Get theme configuration with style overrides
   const { markdownStyles } = useMemo(() => {
-    return getTheme(theme);
-  }, [theme]);
+    return getTheme(theme, styleOverrides);
+  }, [theme, styleOverrides]);
 
   // Render component instances
   const renderComponent = useCallback((componentInstance: ComponentInstance) => {
@@ -311,9 +318,10 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
     </View>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if children or theme changes
+  // Only re-render if children, theme, or styleOverrides change
   return prevProps.children === nextProps.children && 
-         prevProps.theme === nextProps.theme;
+         prevProps.theme === nextProps.theme &&
+         prevProps.styleOverrides === nextProps.styleOverrides;
 });
 
 export default StreamdownRN;

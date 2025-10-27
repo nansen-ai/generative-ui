@@ -31,6 +31,9 @@ const INCOMPLETE_PATTERNS: IncompletePatterns = {
   
   // Heading: # heading without proper spacing
   unClosedHeading: /^(#{1,6}\s+.*)$/m,
+  
+  // Component syntax: {{component: ... without closing }}
+  unClosedComponent: /\{\{component:/,
 };
 
 /**
@@ -42,6 +45,16 @@ export function fixIncompleteMarkdown(text: string): string {
   }
 
   let processedText = text;
+
+  // CRITICAL: Hide incomplete component syntax FIRST before any other processing
+  // This prevents users from seeing partial {{component:...}} code while streaming
+  const { cleanText, bufferedComponent } = hideIncompleteComponents(processedText);
+  processedText = cleanText;
+  
+  // Log if we're buffering anything
+  if (bufferedComponent) {
+    console.log('🚫 Hiding incomplete component from display');
+  }
 
   // Fix incomplete bold text - but only if it's truly incomplete
   // Check if the text has unmatched ** at the beginning
@@ -78,6 +91,79 @@ export function fixIncompleteMarkdown(text: string): string {
   processedText = fixIncompleteHeadings(processedText);
 
   return processedText;
+}
+
+/**
+ * Hide incomplete component syntax to prevent showing partial code
+ * Returns the text with incomplete components removed and the buffered component text
+ */
+function hideIncompleteComponents(text: string): { cleanText: string; bufferedComponent: string } {
+  // Find the last occurrence of {{component:
+  const lastComponentStart = text.lastIndexOf('{{component:');
+  
+  if (lastComponentStart === -1) {
+    // No component syntax found
+    return { cleanText: text, bufferedComponent: '' };
+  }
+  
+  // Check if there's a complete component (closing }}) after the last opening
+  const textAfterComponentStart = text.substring(lastComponentStart);
+  
+  // Count braces to find matching closing }}
+  let braceCount = 0;
+  let inString = false;
+  let escapeNext = false;
+  let foundClosing = false;
+  
+  for (let i = 0; i < textAfterComponentStart.length; i++) {
+    const char = textAfterComponentStart[i];
+    const nextChar = textAfterComponentStart[i + 1];
+    
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (inString) continue;
+    
+    if (char === '{') {
+      braceCount++;
+    } else if (char === '}') {
+      braceCount--;
+      
+      // Check if this is the closing }} (two consecutive })
+      if (braceCount === 0 && nextChar === '}') {
+        foundClosing = true;
+        break;
+      }
+    }
+  }
+  
+  if (foundClosing) {
+    // Component is complete, don't hide anything
+    return { cleanText: text, bufferedComponent: '' };
+  }
+  
+  // Component is incomplete, hide everything from {{component: onwards
+  const cleanText = text.substring(0, lastComponentStart);
+  const bufferedComponent = text.substring(lastComponentStart);
+  
+  console.log('🔒 Buffering incomplete component:', {
+    bufferLength: bufferedComponent.length,
+    bufferPreview: bufferedComponent.substring(0, 100)
+  });
+  
+  return { cleanText, bufferedComponent };
 }
 
 /**
@@ -185,6 +271,7 @@ export function isMarkdownIncomplete(text: string): boolean {
     INCOMPLETE_PATTERNS.unClosedCode,
     INCOMPLETE_PATTERNS.unClosedCodeBlock,
     INCOMPLETE_PATTERNS.unClosedLink,
+    INCOMPLETE_PATTERNS.unClosedComponent,
   ];
 
   return patterns.some(pattern => pattern.test(text));

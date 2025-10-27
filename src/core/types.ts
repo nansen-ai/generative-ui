@@ -107,6 +107,8 @@ export interface StreamdownRNProps {
   componentRegistry?: ComponentRegistry;
   /** Theme configuration */
   theme?: 'light' | 'dark' | ThemeConfig;
+  /** Style overrides for markdown elements (deep merged with theme styles) */
+  styleOverrides?: Partial<Record<string, any>>;
   /** Error handler for component failures */
   onComponentError?: (error: ComponentError) => void;
   /** Additional styling */
@@ -124,4 +126,5 @@ export interface IncompletePatterns {
   unClosedLink: RegExp;
   unClosedList: RegExp;
   unClosedHeading: RegExp;
+  unClosedComponent: RegExp;
 }
