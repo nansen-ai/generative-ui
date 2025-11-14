@@ -14,6 +14,8 @@ import { Asset } from 'expo-asset';
 import { StreamdownRN } from 'streamdown-rn';
 import { createTestComponentRegistry } from './components/TestComponents';
 import { Header } from './components/Header';
+import { StateDebugPanel } from './components/StateDebugPanel';
+import type { IncompleteTagState } from '../src/core/types';
 
 // Light mode colorway matching Dark website
 const COLORS = {
@@ -32,7 +34,7 @@ const COLORS = {
 
 // Preset markdown examples
 const PRESETS = {
-  basic: `# Hello World
+  Basic: `# Hello World
 
 This is **bold text** and *italic text*.
 
@@ -55,7 +57,7 @@ function greet(name) {
 [Link to example](https://example.com)
 `,
 
-  withComponents: `# Token Analysis
+  Components: `# Token Analysis
 
 Here's the current Bitcoin data:
 
@@ -79,7 +81,7 @@ And badges: {{component: "Badge", props: {
 }}}
 `,
 
-  codeBlocks: `# Smart Contract Example
+  Code: `# Smart Contract Example
 
 Here's a simple Solidity contract:
 
@@ -107,7 +109,7 @@ def fibonacci(n):
 \`\`\`
 `,
 
-  tables: `# Data Table
+  Tables: `# Data Table
 
 | Token | Price | Change |
 |-------|-------|--------|
@@ -126,14 +128,16 @@ def fibonacci(n):
 };
 
 export default function App() {
-  const [markdown, setMarkdown] = useState(PRESETS.basic);
+  const [markdown, setMarkdown] = useState(PRESETS.Basic);
   const [streamingMarkdown, setStreamingMarkdown] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [streamSpeed, setStreamSpeed] = useState(50); // ms per character
   const [speedInputValue, setSpeedInputValue] = useState('50');
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
-  const [selectedPreset, setSelectedPreset] = useState<string>('basic');
+  const [selectedPreset, setSelectedPreset] = useState<string>('Basic');
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [debugState, setDebugState] = useState<IncompleteTagState | null>(null);
   const streamingRef = useRef<NodeJS.Timeout | null>(null);
   const currentIndexRef = useRef<number>(0);
   const componentRegistry = createTestComponentRegistry();
@@ -327,20 +331,18 @@ export default function App() {
                   <TouchableOpacity
                     key={preset}
                     style={[
-                      styles.presetButton,
-                      selectedPreset === preset && styles.presetButtonActive,
+                      styles.themeButton,
+                      selectedPreset === preset && styles.themeButtonActive,
                     ]}
                     onPress={() => handlePresetChange(preset)}
                     activeOpacity={0.7}
                   >
-                    <Text
-                      style={[
-                        styles.presetButtonText,
-                        { fontFamily },
-                        selectedPreset === preset && styles.presetButtonTextActive,
-                      ]}
-                    >
-                      {preset.charAt(0).toUpperCase() + preset.slice(1)}
+                    <Text style={[
+                      styles.themeButtonText,
+                      { fontFamily },
+                      selectedPreset === preset && styles.themeButtonTextActive,
+                    ]}>
+                      {preset}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -405,7 +407,8 @@ export default function App() {
               </View>
             </View>
 
-            {/* Streaming controls */}
+
+            {/* Start, Reset, Debug buttons */}
             <View style={[styles.controlRow, styles.rightControlRow]}>
               <View style={styles.streamControls}>
                 {!isStreaming ? (
@@ -414,7 +417,7 @@ export default function App() {
                     onPress={startStreaming}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.buttonText, { fontFamily }]}>Start Streaming</Text>
+                    <Text style={[styles.buttonText, { fontFamily }]}>Start</Text>
                   </TouchableOpacity>
                 ) : isPaused ? (
                   <TouchableOpacity
@@ -439,6 +442,13 @@ export default function App() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.buttonText, { fontFamily }]}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonPill, showDebugPanel && styles.buttonActive]}
+                  onPress={() => setShowDebugPanel(!showDebugPanel)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.buttonText, { fontFamily }]}>Debug</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -473,6 +483,9 @@ export default function App() {
                 onComponentError={(error) => {
                   console.warn('Component error:', error);
                 }}
+                onStateUpdate={(state) => {
+                  setDebugState(state);
+                }}
               >
                 {streamingMarkdown}
               </StreamdownRN>
@@ -480,6 +493,15 @@ export default function App() {
           </View>
         </View>
       </View>
+
+      {/* Debug Panel */}
+      {showDebugPanel && debugState && (
+        <StateDebugPanel
+          state={debugState}
+          currentText={streamingMarkdown}
+          onClose={() => setShowDebugPanel(false)}
+        />
+      )}
     </View>
   );
 }
@@ -587,11 +609,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.buttonBorder,
     backgroundColor: 'transparent',
-    minWidth: 140,
     alignItems: 'center',
   },
   buttonPill: {
-    // Already styled above
+    paddingHorizontal: 16,
+  },
+  buttonActive: {
+    backgroundColor: COLORS.accent,
   },
   buttonText: {
     fontSize: 14,

@@ -5,11 +5,11 @@
  * inspired by Vercel's Streamdown but built specifically for React Native.
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import { View, Text } from 'react-native';
 
-import { StreamdownRNProps, ThemeConfig, ComponentInstance } from './core/types';
-import { optimizeForStreaming } from './core/parseIncomplete';
+import { StreamdownRNProps, ThemeConfig, ComponentInstance, INITIAL_INCOMPLETE_STATE } from './core/types';
+import { optimizeForStreaming, updateIncompleteTagState } from './core/parseIncomplete';
 import { extractComponents, injectComponentPlaceholders } from './core/componentInjector';
 import { darkTheme, darkMarkdownStyles } from './themes/dark';
 import { lightTheme, lightMarkdownStyles } from './themes/light';
@@ -63,24 +63,48 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
   styleOverrides,
   onComponentError,
   style,
+  onStateUpdate,
 }) => {
+  // Maintain incomplete tag state for performance optimization
+  const incompleteTagStateRef = useRef(INITIAL_INCOMPLETE_STATE);
+  
   console.log('🚀 StreamdownRN called with:', {
     textLength: children?.length || 0,
     textPreview: children?.substring(0, 200),
     hasRegistry: !!componentRegistry,
-    theme
+    theme,
+    stateStackSize: incompleteTagStateRef.current.stack.length,
+    earliestPosition: incompleteTagStateRef.current.earliestPosition,
   });
 
   // Process markdown with streaming optimizations
   const processedContent = useMemo(() => {
     if (!children || children.length === 0) {
+      // Reset state when content is empty
+      incompleteTagStateRef.current = INITIAL_INCOMPLETE_STATE;
       return { markdown: '', components: [] };
     }
 
     console.log('🔄 Processing markdown content...');
+    
+    // Update incomplete tag state incrementally
+    const newState = updateIncompleteTagState(incompleteTagStateRef.current, children);
+    incompleteTagStateRef.current = newState;
+    
+    // Notify state update callback (for debugging)
+    if (onStateUpdate) {
+      onStateUpdate(newState);
+    }
+    
+    console.log('📊 Incomplete tag state:', {
+      stackSize: newState.stack.length,
+      earliestPosition: newState.earliestPosition,
+      tagCounts: newState.tagCounts,
+      processingFromPosition: newState.earliestPosition,
+    });
 
-    // Fix incomplete markdown for streaming
-    const optimizedMarkdown = optimizeForStreaming(children);
+    // Fix incomplete markdown for streaming (pass state for optimization)
+    const optimizedMarkdown = optimizeForStreaming(children, newState);
     
     console.log('✅ Optimized markdown:', optimizedMarkdown.substring(0, 300));
     
