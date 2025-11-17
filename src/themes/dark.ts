@@ -32,6 +32,9 @@ export const darkTheme: ThemeConfig = {
     codeBlockHeaderText: '#8b949e',
     codeBlockCopyButtonBg: '#21262d',
     codeBlockCopyButtonText: '#c9d1d9',
+    // Skeleton colors
+    skeletonBase: '#161b22',
+    skeletonHighlight: '#21262d',
   },
   fonts: {
     body: undefined,          // Use system default

@@ -12,10 +12,11 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Asset } from 'expo-asset';
 import { StreamdownRN } from 'streamdown-rn';
-import { createTestComponentRegistry } from './components/TestComponents';
+import { createTestComponentRegistry, componentSourceCode } from './components/TestComponents';
 import { Header } from './components/Header';
 import { StateDebugPanel } from './components/StateDebugPanel';
-import type { IncompleteTagState } from '../src/core/types';
+import { ComponentLibrary } from './components/ComponentLibrary';
+import type { IncompleteTagState, ComponentExtractionState } from '../src/core/types';
 
 // Light mode colorway matching Dark website
 const COLORS = {
@@ -61,24 +62,13 @@ function greet(name) {
 
 Here's the current Bitcoin data:
 
-{{component: "TokenCard", props: {
-  "tokenSymbol": "BTC",
-  "tokenName": "Bitcoin",
-  "tokenPrice": 45000,
-  "priceChange24h": 2.5
-}}}
+{{c:"TokenCard",p:{"sym":"BTC","name":"Bitcoin","price":45000,"change":2.5}}}
 
 The price has been **trending upward** recently.
 
-You can also use buttons inline: {{component: "Button", props: {
-  "label": "View Details",
-  "variant": "primary"
-}}}
+You can also use buttons inline: {{c:"Button",p:{"label":"View Details","variant":"primary"}}}
 
-And badges: {{component: "Badge", props: {
-  "text": "New",
-  "color": "#494C53"
-}}}
+And badges: {{c:"Badge",p:{"text":"New","color":"#494C53"}}}
 `,
 
   Code: `# Smart Contract Example
@@ -137,7 +127,9 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [selectedPreset, setSelectedPreset] = useState<string>('Basic');
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showComponentLibrary, setShowComponentLibrary] = useState(false);
   const [debugState, setDebugState] = useState<IncompleteTagState | null>(null);
+  const [componentExtractionState, setComponentExtractionState] = useState<ComponentExtractionState | null>(null);
   const streamingRef = useRef<NodeJS.Timeout | null>(null);
   const currentIndexRef = useRef<number>(0);
   const componentRegistry = createTestComponentRegistry();
@@ -191,6 +183,38 @@ export default function App() {
       }
     };
   }, []);
+
+  // Keyboard event handlers for character-by-character navigation
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      // Only handle arrow keys when paused
+      if (!isPaused) return;
+
+      // Prevent default scrolling behavior
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+      }
+
+      if (event.key === 'ArrowLeft') {
+        if (currentIndexRef.current > 0) {
+          currentIndexRef.current--;
+          setStreamingMarkdown(markdown.substring(0, currentIndexRef.current));
+        }
+      } else if (event.key === 'ArrowRight') {
+        if (currentIndexRef.current < markdown.length) {
+          currentIndexRef.current++;
+          setStreamingMarkdown(markdown.substring(0, currentIndexRef.current));
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPaused, markdown]);
 
   // Web font loading for web platform
   useEffect(() => {
@@ -273,6 +297,20 @@ export default function App() {
     if (streamingRef.current) {
       clearTimeout(streamingRef.current);
       streamingRef.current = null;
+    }
+  };
+
+  const stepBackward = () => {
+    if (currentIndexRef.current > 0) {
+      currentIndexRef.current--;
+      setStreamingMarkdown(markdown.substring(0, currentIndexRef.current));
+    }
+  };
+
+  const stepForward = () => {
+    if (currentIndexRef.current < markdown.length) {
+      currentIndexRef.current++;
+      setStreamingMarkdown(markdown.substring(0, currentIndexRef.current));
     }
   };
 
@@ -420,13 +458,31 @@ export default function App() {
                     <Text style={[styles.buttonText, { fontFamily }]}>Start</Text>
                   </TouchableOpacity>
                 ) : isPaused ? (
-                  <TouchableOpacity
-                    style={[styles.button, styles.buttonPill]}
-                    onPress={resumeStreaming}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.buttonText, { fontFamily }]}>Resume</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      style={[styles.button, styles.buttonIcon]}
+                      onPress={stepBackward}
+                      activeOpacity={0.7}
+                      disabled={streamingMarkdown.length === 0}
+                    >
+                      <Text style={[styles.buttonText, { fontFamily, opacity: streamingMarkdown.length === 0 ? 0.3 : 1 }]}>←</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.buttonPill]}
+                      onPress={resumeStreaming}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.buttonText, { fontFamily }]}>Resume</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.buttonIcon]}
+                      onPress={stepForward}
+                      activeOpacity={0.7}
+                      disabled={streamingMarkdown.length >= markdown.length}
+                    >
+                      <Text style={[styles.buttonText, { fontFamily, opacity: streamingMarkdown.length >= markdown.length ? 0.3 : 1 }]}>→</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
                   <TouchableOpacity
                     style={[styles.button, styles.buttonPill]}
@@ -449,6 +505,13 @@ export default function App() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.buttonText, { fontFamily }]}>Debug</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonPill, showComponentLibrary && styles.buttonActive]}
+                  onPress={() => setShowComponentLibrary(!showComponentLibrary)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.buttonText, { fontFamily }]}>Components</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -486,6 +549,9 @@ export default function App() {
                 onStateUpdate={(state) => {
                   setDebugState(state);
                 }}
+                onComponentExtractionUpdate={(state) => {
+                  setComponentExtractionState(state);
+                }}
               >
                 {streamingMarkdown}
               </StreamdownRN>
@@ -499,7 +565,32 @@ export default function App() {
         <StateDebugPanel
           state={debugState}
           currentText={streamingMarkdown}
+          componentState={componentExtractionState || undefined}
           onClose={() => setShowDebugPanel(false)}
+        />
+      )}
+
+      {/* Component Library */}
+      {showComponentLibrary && (
+        <ComponentLibrary
+          components={[
+            {
+              name: 'TokenCard',
+              code: componentSourceCode.TokenCard,
+              description: 'Displays token information with progressive rendering',
+            },
+            {
+              name: 'Button',
+              code: componentSourceCode.Button,
+              description: 'A simple button component with progressive rendering',
+            },
+            {
+              name: 'Badge',
+              code: componentSourceCode.Badge,
+              description: 'A badge component with progressive rendering',
+            },
+          ]}
+          onClose={() => setShowComponentLibrary(false)}
         />
       )}
     </View>
@@ -613,6 +704,10 @@ const styles = StyleSheet.create({
   },
   buttonPill: {
     paddingHorizontal: 16,
+  },
+  buttonIcon: {
+    paddingHorizontal: 12,
+    minWidth: 40,
   },
   buttonActive: {
     backgroundColor: COLORS.accent,

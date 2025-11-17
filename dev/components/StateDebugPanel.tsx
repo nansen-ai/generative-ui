@@ -8,9 +8,16 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { IncompleteTagState } from '../../src/core/types';
 
+interface ComponentExtractionState {
+  completeComponents: Array<{ name: string; fields: string[] }>;
+  partialComponents: Array<{ name: string; fields: string[] }>;
+  emptyComponents: string[];
+}
+
 interface StateDebugPanelProps {
   state: IncompleteTagState;
   currentText: string;
+  componentState?: ComponentExtractionState;
   onClose?: () => void;
 }
 
@@ -24,7 +31,7 @@ const TAG_COLORS: Record<string, string> = {
   component: '#C7CEEA',
 };
 
-export function StateDebugPanel({ state, currentText, onClose }: StateDebugPanelProps) {
+export function StateDebugPanel({ state, currentText, componentState, onClose }: StateDebugPanelProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -37,9 +44,105 @@ export function StateDebugPanel({ state, currentText, onClose }: StateDebugPanel
       </View>
 
       <ScrollView style={styles.content}>
+        {/* Component Extraction State */}
+        {componentState && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Component Extraction</Text>
+            
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Empty Components:</Text>
+              <Text style={styles.statValue}>{componentState.emptyComponents.length}</Text>
+            </View>
+            {componentState.emptyComponents.length > 0 && (
+              <View style={styles.componentList}>
+                {componentState.emptyComponents.map((name, idx) => (
+                  <View key={idx} style={[styles.componentItem, styles.emptyComponent]}>
+                    <Text style={styles.componentName}>{name}</Text>
+                    <Text style={styles.componentFields}>No fields yet</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Partial Components:</Text>
+              <Text style={styles.statValue}>{componentState.partialComponents.length}</Text>
+            </View>
+            {componentState.partialComponents.length > 0 && (
+              <View style={styles.componentList}>
+                {componentState.partialComponents.map((comp, idx) => (
+                  <View key={idx} style={[styles.componentItem, styles.partialComponent]}>
+                    <Text style={styles.componentName}>{comp.name}</Text>
+                    <Text style={styles.componentFields}>
+                      Fields: {comp.fields.join(', ')}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Complete Components:</Text>
+              <Text style={styles.statValue}>{componentState.completeComponents.length}</Text>
+            </View>
+            {componentState.completeComponents.length > 0 && (
+              <View style={styles.componentList}>
+                {componentState.completeComponents.map((comp, idx) => (
+                  <View key={idx} style={[styles.componentItem, styles.completeComponent]}>
+                    <Text style={styles.componentName}>{comp.name}</Text>
+                    <Text style={styles.componentFields}>
+                      Fields: {comp.fields.join(', ')}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            {/* JSON Cleanup Details */}
+            {componentState.lastJSONCleanup && (
+              <View style={styles.jsonCleanupSection}>
+                <Text style={styles.jsonCleanupTitle}>Last JSON Cleanup</Text>
+                
+                <View style={[styles.jsonBox, componentState.lastJSONCleanup.success ? styles.jsonSuccess : styles.jsonError]}>
+                  <Text style={styles.jsonLabel}>Original:</Text>
+                  <Text style={styles.jsonCode}>{componentState.lastJSONCleanup.original}</Text>
+                </View>
+                
+                {componentState.lastJSONCleanup.steps.length > 0 && (
+                  <View style={styles.cleanupSteps}>
+                    {componentState.lastJSONCleanup.steps.map((step: any, idx: number) => (
+                      <View key={idx} style={styles.cleanupStep}>
+                        <Text style={styles.stepNumber}>{idx + 1}</Text>
+                        <View style={styles.stepContent}>
+                          <Text style={styles.stepName}>{step.step}</Text>
+                          <Text style={styles.stepBefore}>Before: {step.before}</Text>
+                          <Text style={styles.stepAfter}>After: {step.after}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
+                <View style={[styles.jsonBox, componentState.lastJSONCleanup.success ? styles.jsonSuccess : styles.jsonError]}>
+                  <Text style={styles.jsonLabel}>Final:</Text>
+                  <Text style={styles.jsonCode}>{componentState.lastJSONCleanup.final}</Text>
+                  
+                  {componentState.lastJSONCleanup.success ? (
+                    <Text style={styles.jsonStatusSuccess}>✓ Parsed successfully</Text>
+                  ) : (
+                    <Text style={styles.jsonStatusError}>
+                      ✗ Parse failed: {componentState.lastJSONCleanup.error}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+        
         {/* Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Overview</Text>
+          <Text style={styles.sectionTitle}>Markdown Tags</Text>
           <View style={styles.stat}>
             <Text style={styles.statLabel}>Text Length:</Text>
             <Text style={styles.statValue}>{currentText.length} chars</Text>
@@ -111,9 +214,11 @@ export function StateDebugPanel({ state, currentText, onClose }: StateDebugPanel
             <View style={styles.boundaryVisualization}>
               <View style={styles.processedPortion}>
                 <Text style={styles.portionLabel}>Skipped (cached)</Text>
-                <Text style={styles.portionText} numberOfLines={2}>
-                  {currentText.slice(0, state.earliestPosition)}
-                </Text>
+                <ScrollView style={styles.portionScroll} horizontal>
+                  <Text style={styles.portionText}>
+                    {currentText.slice(0, state.earliestPosition)}
+                  </Text>
+                </ScrollView>
                 <Text style={styles.portionSize}>
                   {state.earliestPosition} chars
                 </Text>
@@ -121,9 +226,11 @@ export function StateDebugPanel({ state, currentText, onClose }: StateDebugPanel
               <View style={styles.boundarySeparator} />
               <View style={styles.processingPortion}>
                 <Text style={styles.portionLabel}>Processing</Text>
-                <Text style={styles.portionText} numberOfLines={2}>
-                  {currentText.slice(state.earliestPosition)}
-                </Text>
+                <ScrollView style={styles.portionScroll} horizontal>
+                  <Text style={styles.portionText}>
+                    {currentText.slice(state.earliestPosition)}
+                  </Text>
+                </ScrollView>
                 <Text style={styles.portionSize}>
                   {currentText.length - state.earliestPosition} chars
                 </Text>
@@ -303,15 +410,140 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: 'uppercase',
   },
+  portionScroll: {
+    maxHeight: 100,
+    marginBottom: 6,
+  },
   portionText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#2A2A2A',
+  },
+  portionSize: {
+    fontSize: 10,
+    color: '#999',
+  },
+  componentList: {
+    marginTop: 8,
+    gap: 6,
+  },
+  componentItem: {
+    borderRadius: 6,
+    padding: 10,
+    borderLeftWidth: 3,
+  },
+  emptyComponent: {
+    backgroundColor: '#FEF3C7',
+    borderLeftColor: '#F59E0B',
+  },
+  partialComponent: {
+    backgroundColor: '#DBEAFE',
+    borderLeftColor: '#3B82F6',
+  },
+  completeComponent: {
+    backgroundColor: '#D1FAE5',
+    borderLeftColor: '#10B981',
+  },
+  componentName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2A2A2A',
+    marginBottom: 4,
+  },
+  componentFields: {
+    fontSize: 11,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  jsonCleanupSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  jsonCleanupTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  jsonBox: {
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  jsonSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  jsonError: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  jsonLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  jsonCode: {
     fontSize: 11,
     fontFamily: 'monospace',
     color: '#2A2A2A',
     marginBottom: 6,
   },
-  portionSize: {
+  jsonStatusSuccess: {
+    fontSize: 11,
+    color: '#16A34A',
+    fontWeight: '500',
+  },
+  jsonStatusError: {
+    fontSize: 11,
+    color: '#DC2626',
+  },
+  cleanupSteps: {
+    gap: 6,
+    marginBottom: 8,
+  },
+  cleanupStep: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 4,
+    padding: 8,
+  },
+  stepNumber: {
     fontSize: 10,
-    color: '#999',
+    fontWeight: '600',
+    color: '#FFFFFF',
+    backgroundColor: '#6B7280',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  stepContent: {
+    flex: 1,
+    gap: 2,
+  },
+  stepName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  stepBefore: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#DC2626',
+  },
+  stepAfter: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#16A34A',
   },
 });
 

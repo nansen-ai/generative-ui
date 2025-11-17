@@ -32,6 +32,9 @@ export const lightTheme: ThemeConfig = {
     codeBlockHeaderText: '#6e7781',
     codeBlockCopyButtonBg: '#e1e4e8',
     codeBlockCopyButtonText: '#24292e',
+    // Skeleton colors
+    skeletonBase: '#f6f8fa',
+    skeletonHighlight: '#ffffff',
   },
   fonts: {
     body: undefined,          // Use system default

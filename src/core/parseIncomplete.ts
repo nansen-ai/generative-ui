@@ -5,7 +5,7 @@
  * Inspired by Streamdown's approach but adapted for React Native.
  */
 
-import { IncompleteTagState } from './types';
+import { IncompleteTagState, INITIAL_INCOMPLETE_STATE, ComponentRegistry } from './types';
 
 
 
@@ -15,7 +15,8 @@ import { IncompleteTagState } from './types';
  */
 export function fixIncompleteMarkdown(
   text: string,
-  state?: IncompleteTagState
+  state?: IncompleteTagState,
+  registry?: ComponentRegistry
 ): string {
   if (!text || text.length === 0) {
     return text;
@@ -24,7 +25,7 @@ export function fixIncompleteMarkdown(
   // Always hide incomplete markers (even when stack is empty)
   text = hideIncompleteCodeBlockMarkers(text);
   
-  const { cleanText } = hideIncompleteComponents(text);
+  const { cleanText } = hideIncompleteComponents(text, registry);
   text = cleanText;
 
   // If we have state and no incomplete tags, skip completion processing
@@ -44,17 +45,18 @@ export function fixIncompleteMarkdown(
     console.log('🔄 Performance: Only processing from position', startPos, 
                 'out of', text.length, 'characters');
     
-    return unchangedPart + processMarkdown(needsFixing, true);
+    return unchangedPart + processMarkdown(needsFixing, true, state?.inCodeBlock || false, registry);
   }
 
-  return processMarkdown(text, true);
+  return processMarkdown(text, true, state?.inCodeBlock || false, registry);
 }
 
 /**
  * Process markdown text (original fixIncompleteMarkdown logic)
  * @param skipHiding - if true, skip hiding logic (already done in parent)
+ * @param inCodeBlock - if true, skip all markdown fixes except code block fixes
  */
-function processMarkdown(text: string, skipHiding = false): string {
+function processMarkdown(text: string, skipHiding = false, inCodeBlock = false, registry?: ComponentRegistry): string {
   if (!text || text.length === 0) {
     return text;
   }
@@ -66,13 +68,20 @@ function processMarkdown(text: string, skipHiding = false): string {
     processedText = hideIncompleteCodeBlockMarkers(processedText);
 
     // Hide incomplete component syntax
-    const { cleanText, bufferedComponent } = hideIncompleteComponents(processedText);
+    const { cleanText, bufferedComponent } = hideIncompleteComponents(processedText, registry);
     processedText = cleanText;
     
     // Log if we're buffering anything
     if (bufferedComponent) {
       console.log('🚫 Hiding incomplete component from display');
     }
+  }
+
+  // If we're inside a code block, skip all markdown fixes (code is raw)
+  if (inCodeBlock) {
+    // Only fix code blocks themselves
+    processedText = fixIncompleteCodeBlock(processedText);
+    return processedText;
   }
 
   // Fix incomplete bold text - but only if it's truly incomplete
@@ -123,11 +132,11 @@ function hideIncompleteCodeBlockMarkers(text: string): string {
 }
 
 /**
- * Hide incomplete component syntax to prevent showing partial code
- * Returns the text with incomplete components removed and the buffered component text
+ * Hide incomplete component syntax and insert skeleton placeholders
+ * Returns the text with skeleton markers for incomplete components
  */
-function hideIncompleteComponents(text: string): { cleanText: string; bufferedComponent: string } {
-  // Find the last occurrence of {{ (any component start, not just {{component:)
+function hideIncompleteComponents(text: string, registry?: ComponentRegistry): { cleanText: string; bufferedComponent: string } {
+  // Find the last occurrence of {{ (any component start, not just {{c:)
   const lastComponentStart = text.lastIndexOf('{{');
   
   // Check if the last {{ is complete
@@ -236,15 +245,39 @@ function hideIncompleteComponents(text: string): { cleanText: string; bufferedCo
     return { cleanText: text, bufferedComponent: '' };
   }
   
-  // Component is incomplete, hide everything from {{ onwards
-  const cleanText = text.substring(0, lastComponentStart);
+  // Component is incomplete - try to extract component name and insert skeleton
   const bufferedComponent = text.substring(lastComponentStart);
+  let cleanText = text.substring(0, lastComponentStart);
   
   console.log('🔒 Buffering incomplete component:', {
     cleanText: cleanText.substring(Math.max(0, cleanText.length - 50)),
     bufferLength: bufferedComponent.length,
     bufferPreview: bufferedComponent.substring(0, 100)
   });
+  
+  // Try to extract component name from incomplete syntax: {{c:"ComponentName"
+  const componentNameMatch = bufferedComponent.match(/^\{\{c:\s*"([^"]+)"/);
+  
+  if (componentNameMatch && registry) {
+    const componentName = componentNameMatch[1];
+    const componentDef = registry.get(componentName);
+    
+    if (componentDef) {
+      // Check if we've started the props section: {{c:"Name",p:{
+      const hasPropsStart = /^\{\{c:\s*"[^"]+"\s*,\s*p:\s*\{/.test(bufferedComponent);
+      
+      // Always insert empty component marker
+      // It will be replaced by partial component marker once JSON becomes parseable
+      const emptyComponentMarker = `\`__EMPTY_COMPONENT__${componentName}__\``;
+      cleanText = cleanText + emptyComponentMarker;
+      
+      if (hasPropsStart) {
+        console.log('💀 Inserting empty component marker (props started, waiting for parseable JSON):', componentName);
+      } else {
+        console.log('💀 Inserting empty component marker (props not started yet):', componentName);
+      }
+    }
+  }
   
   return { cleanText, bufferedComponent };
 }
@@ -635,7 +668,7 @@ export function isMarkdownIncomplete(text: string): boolean {
   }
 
   // Check for incomplete components using the same logic as hideIncompleteComponents
-  const lastComponentStart = text.lastIndexOf('{{component:');
+  const lastComponentStart = text.lastIndexOf('{{c:');
   if (lastComponentStart !== -1) {
     const textAfterComponentStart = text.substring(lastComponentStart);
     let braceCount = 0;
@@ -702,6 +735,24 @@ export function updateIncompleteTagState(
   state: IncompleteTagState,
   newText: string
 ): IncompleteTagState {
+  // If text length decreased (stepping backward), reset and rebuild from scratch
+  if (newText.length < state.previousTextLength) {
+    console.log('🔄 Text length decreased - resetting state and rebuilding from scratch');
+    // Reset to initial state and rebuild incrementally
+    let resetState = INITIAL_INCOMPLETE_STATE;
+    // Rebuild state character by character up to new length
+    // This is safe because we're always building forward, never backward
+    for (let i = 0; i < newText.length; i++) {
+      const incrementalText = newText.substring(0, i + 1);
+      const incrementalChars = incrementalText.slice(resetState.previousTextLength);
+      if (incrementalChars.length > 0) {
+        // Process the incremental characters
+        resetState = processCharacterUpdates(resetState, incrementalText, incrementalChars);
+      }
+    }
+    return resetState;
+  }
+  
   // Extract new characters that were added
   const newChars = newText.slice(state.previousTextLength);
   
@@ -710,23 +761,47 @@ export function updateIncompleteTagState(
     return state;
   }
   
+  // Process the new characters
+  return processCharacterUpdates(state, newText, newChars);
+}
+
+/**
+ * Process character updates and update state accordingly
+ * This is extracted to avoid recursion when rebuilding state
+ */
+function processCharacterUpdates(
+  state: IncompleteTagState,
+  fullText: string,
+  newChars: string
+): IncompleteTagState {
   // Start with current state
   let stack = [...state.stack];
   let tagCounts = { ...state.tagCounts };
   let inCodeBlock = state.inCodeBlock;
   let inInlineCode = state.inInlineCode;
   
+  // CRITICAL: If we're already in a code block, clean up any invalid tags first
+  if (inCodeBlock) {
+    const nonCodeBlockTags = stack.filter(tag => tag.type !== 'codeBlock');
+    if (nonCodeBlockTags.length > 0) {
+      console.log('🧹 Pre-cleanup: Removing tags found at start of processing (inCodeBlock=true):', nonCodeBlockTags.map(t => t.type));
+      stack = stack.filter(tag => tag.type === 'codeBlock');
+      tagCounts = { ...tagCounts, bold: 0, italic: 0, code: 0, link: 0, component: 0 };
+    }
+  }
+  
   // Process each new character
   for (let i = 0; i < newChars.length; i++) {
     const position = state.previousTextLength + i;
     const char = newChars[i];
-    const prevChar = i > 0 ? newChars[i - 1] : (state.previousTextLength > 0 ? newText[position - 1] : '');
+    const prevChar = i > 0 ? newChars[i - 1] : (state.previousTextLength > 0 ? fullText[position - 1] : '');
     const nextChar = newChars[i + 1];
     const nextChar2 = newChars[i + 2];
     
     // Check for opening markers
     
     // Code blocks: ``` (check for 3 backticks)
+    // This is the ONLY markdown processing we do inside code blocks
     if (char === '`' && nextChar === '`' && nextChar2 === '`') {
       // Check if this closes an existing code block (LIFO - find last occurrence)
       const codeBlockIndex = stack.map((tag, idx) => tag.type === 'codeBlock' ? idx : -1)
@@ -738,22 +813,45 @@ export function updateIncompleteTagState(
         tagCounts.codeBlock--;
         inCodeBlock = false; // Exit code block context
       } else {
-        // Open new code block
+        // Open new code block - remove any incomplete tags that shouldn't be in code blocks
+        // Clean up any markdown tags that were opened before entering code block
+        const tagsToRemove = stack.filter(tag => tag.type !== 'codeBlock');
+        if (tagsToRemove.length > 0) {
+          console.log('🧹 Cleaning up tags before entering code block:', tagsToRemove.map(t => t.type));
+        }
+        stack = stack.filter(tag => tag.type === 'codeBlock');
+        tagCounts = { ...tagCounts, bold: 0, italic: 0, code: 0, link: 0, component: 0 };
+        inInlineCode = false; // Reset inline code when entering code block
+        
         stack.push({
           type: 'codeBlock',
           position,
           marker: '```',
-          openingText: newText.slice(Math.max(0, position - 10), position + 13),
+          openingText: fullText.slice(Math.max(0, position - 10), position + 13),
         });
         tagCounts.codeBlock++;
         inCodeBlock = true; // Enter code block context
+        console.log('📦 Entered code block at position', position, '- inCodeBlock:', inCodeBlock);
       }
       i += 2; // Skip next 2 characters
       continue;
     }
     
-    // Bold: ** (check for 2 asterisks)
-    if (char === '*') {
+    // If we're inside a code block, skip ALL other markdown processing
+    if (inCodeBlock) {
+      // Safety check: remove any markdown tags that shouldn't be in code blocks
+      // This handles edge cases where tags might have been added before inCodeBlock was set
+      const nonCodeBlockTags = stack.filter(tag => tag.type !== 'codeBlock');
+      if (nonCodeBlockTags.length > 0) {
+        console.log('🧹 Removing tags found inside code block:', nonCodeBlockTags.map(t => t.type));
+        stack = stack.filter(tag => tag.type === 'codeBlock');
+        tagCounts = { ...tagCounts, bold: 0, italic: 0, code: 0, link: 0, component: 0 };
+      }
+      continue;
+    }
+    
+    // Bold: ** (check for 2 asterisks) - skip if in code block
+    if (char === '*' && !inCodeBlock) {
       // Check if this is part of a ** pair
       const isBoldOpening = nextChar === '*' && prevChar !== '*';
       const isBoldClosing = prevChar === '*' && nextChar !== '*';
@@ -783,7 +881,7 @@ export function updateIncompleteTagState(
             type: 'bold',
             position,
             marker: '**',
-            openingText: newText.slice(Math.max(0, position - 10), position + 12),
+            openingText: fullText.slice(Math.max(0, position - 10), position + 12),
           });
           tagCounts.bold++;
         } else if (isBoldClosing) {
@@ -793,7 +891,7 @@ export function updateIncompleteTagState(
             type: 'bold',
             position: position - 1,
             marker: '**',
-            openingText: newText.slice(Math.max(0, position - 11), position + 11),
+            openingText: fullText.slice(Math.max(0, position - 11), position + 11),
           });
           tagCounts.bold++;
         }
@@ -810,7 +908,7 @@ export function updateIncompleteTagState(
       // Skip if this is part of a ``` sequence
       const isPartOfCodeBlock = (nextChar === '`' && nextChar2 === '`') || 
                                 (prevChar === '`' && nextChar === '`') ||
-                                (prevChar === '`' && (i >= 2 ? newChars[i - 2] : newText[position - 2]) === '`');
+                                (prevChar === '`' && (i >= 2 ? newChars[i - 2] : fullText[position - 2]) === '`');
       
       if (!isPartOfCodeBlock) {
         // Check if this closes an existing code (LIFO - find last occurrence)
@@ -828,7 +926,7 @@ export function updateIncompleteTagState(
             type: 'code',
             position,
             marker: '`',
-            openingText: newText.slice(Math.max(0, position - 10), position + 11),
+            openingText: fullText.slice(Math.max(0, position - 10), position + 11),
           });
           tagCounts.code++;
           inInlineCode = true; // Enter inline code context
@@ -837,8 +935,8 @@ export function updateIncompleteTagState(
       }
     }
     
-    // Italic: * (single asterisk, not part of **)
-    if (char === '*' && prevChar !== '*' && nextChar !== '*') {
+    // Italic: * (single asterisk, not part of **) - skip if in code block
+    if (char === '*' && prevChar !== '*' && nextChar !== '*' && !inCodeBlock) {
       // Check if there's an unclosed bold tag AND prev char is not whitespace
       // This means it's likely the first * of a closing **
       const hasBoldTag = stack.some(tag => tag.type === 'bold');
@@ -864,7 +962,7 @@ export function updateIncompleteTagState(
           type: 'italic',
           position,
           marker: '*',
-          openingText: newText.slice(Math.max(0, position - 10), position + 11),
+          openingText: fullText.slice(Math.max(0, position - 10), position + 11),
         });
         tagCounts.italic++;
       }
@@ -874,23 +972,29 @@ export function updateIncompleteTagState(
     // Links: [ (but only if NOT in code context)
     if (char === '[' && !inCodeBlock && !inInlineCode) {
       // Open new link
+      console.log('🔗 Opening link at position', position, '- inCodeBlock:', inCodeBlock, '- inInlineCode:', inInlineCode);
       stack.push({
         type: 'link',
         position,
         marker: '[',
-        openingText: newText.slice(Math.max(0, position - 10), position + 11),
+        openingText: fullText.slice(Math.max(0, position - 10), position + 11),
       });
       tagCounts.link++;
       continue;
     }
     
-    // Links: closing ) after ]
-    if (char === ')') {
+    // Debug: log if we're trying to process a [ inside a code block
+    if (char === '[' && inCodeBlock) {
+      console.log('⚠️ Ignoring [ at position', position, '- inside code block');
+    }
+    
+    // Links: closing ) after ] - skip if in code block
+    if (char === ')' && !inCodeBlock) {
       // Find most recent link
       for (let j = stack.length - 1; j >= 0; j--) {
         if (stack[j].type === 'link') {
           // Check if there's a ] before this )
-          const textBetween = newText.slice(stack[j].position, position + 1);
+          const textBetween = fullText.slice(stack[j].position, position + 1);
           if (textBetween.includes('](')) {
             // Complete link found
             stack.splice(j, 1);
@@ -909,15 +1013,15 @@ export function updateIncompleteTagState(
         type: 'component',
         position,
         marker: '{{',
-        openingText: newText.slice(Math.max(0, position - 10), position + 22),
+        openingText: fullText.slice(Math.max(0, position - 10), position + 22),
       });
       tagCounts.component++;
       i += 1; // Skip next character
       continue;
     }
     
-    // Components: closing }}
-    if (char === '}' && nextChar === '}') {
+    // Components: closing }} - skip if in code block
+    if (char === '}' && nextChar === '}' && !inCodeBlock) {
       // Find most recent component (LIFO - find last occurrence)
       const componentIndex = stack.map((tag, idx) => tag.type === 'component' ? idx : -1)
         .filter(idx => idx !== -1)
@@ -932,13 +1036,23 @@ export function updateIncompleteTagState(
     }
   }
   
+  // FINAL SAFETY CHECK: If we're in a code block, ensure no markdown tags remain
+  if (inCodeBlock) {
+    const nonCodeBlockTags = stack.filter(tag => tag.type !== 'codeBlock');
+    if (nonCodeBlockTags.length > 0) {
+      console.log('🧹 Final cleanup: Removing tags found at end of processing (inCodeBlock=true):', nonCodeBlockTags.map(t => t.type));
+      stack = stack.filter(tag => tag.type === 'codeBlock');
+      tagCounts = { ...tagCounts, bold: 0, italic: 0, code: 0, link: 0, component: 0 };
+    }
+  }
+  
   // Calculate earliest position (bottom of stack)
-  const earliestPosition = stack.length > 0 ? stack[0].position : newText.length;
+  const earliestPosition = stack.length > 0 ? stack[0].position : fullText.length;
   
   return {
     stack,
     earliestPosition,
-    previousTextLength: newText.length,
+    previousTextLength: fullText.length,
     tagCounts,
     inCodeBlock,
     inInlineCode,
@@ -950,7 +1064,8 @@ export function updateIncompleteTagState(
  */
 export function optimizeForStreaming(
   text: string,
-  state?: IncompleteTagState
+  state?: IncompleteTagState,
+  registry?: ComponentRegistry
 ): string {
   // For very long texts, we might want to limit processing to recent changes
   const MAX_PROCESSING_LENGTH = 10000;
@@ -960,8 +1075,8 @@ export function optimizeForStreaming(
     const recentText = text.slice(-MAX_PROCESSING_LENGTH);
     const beforeText = text.slice(0, -MAX_PROCESSING_LENGTH);
     
-    return beforeText + fixIncompleteMarkdown(recentText, state);
+    return beforeText + fixIncompleteMarkdown(recentText, state, registry);
   }
   
-  return fixIncompleteMarkdown(text, state);
+  return fixIncompleteMarkdown(text, state, registry);
 }

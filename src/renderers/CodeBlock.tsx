@@ -81,23 +81,40 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ code, language, theme }) =
       </View>
 
       {/* Code content with syntax highlighting */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <SyntaxHighlighter
-          language={language || 'text'}
-          style={syntaxStyle}
-          highlighter="hljs"
-          fontSize={13}
-          fontFamily={theme.fonts.code || 'monospace'}
-          customStyle={{
-            backgroundColor: 'transparent',
-            padding: 16,
-            paddingTop: 8,
-            margin: 0,
-          }}
+      <View style={styles.codeContainer}>
+        <ScrollView 
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          {trimmedCode}
-        </SyntaxHighlighter>
-      </ScrollView>
+          <SyntaxHighlighter
+            language={language || 'text'}
+            style={syntaxStyle}
+            highlighter="hljs"
+            fontSize={13}
+            fontFamily={theme.fonts.code || 'monospace'}
+            customStyle={{
+              backgroundColor: 'transparent',
+              padding: 16,
+              paddingTop: 8,
+              margin: 0,
+              width: '100%',
+            }}
+            PreTag={({ children, ...props }: any) => (
+              <View {...props} style={[props.style, styles.preTag]}>
+                {children}
+              </View>
+            )}
+            CodeTag={({ children, ...props }: any) => (
+              <Text {...props} style={[props.style, styles.codeTag]}>
+                {children}
+              </Text>
+            )}
+          >
+            {trimmedCode}
+          </SyntaxHighlighter>
+        </ScrollView>
+      </View>
     </View>
   );
 };
@@ -128,6 +145,18 @@ const styles = StyleSheet.create({
   copyButtonText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  codeContainer: {
+    maxHeight: 400, // Limit height, allow scrolling if needed
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  preTag: {
+    width: '100%',
+  },
+  codeTag: {
+    // Text components wrap by default in React Native
   },
   codeWrapper: {
     padding: 16,

@@ -11,6 +11,13 @@ export interface ComponentRegistry {
 }
 
 /**
+ * Component rendering metadata for progressive rendering
+ */
+export interface ComponentRenderingMetadata {
+  fieldOrder?: string[]; // e.g., ['sym', 'name', 'price', 'change'] - render priority
+}
+
+/**
  * Component definition structure - matches existing registry
  */
 export interface ComponentDefinition {
@@ -20,6 +27,7 @@ export interface ComponentDefinition {
   description?: string;
   propsSchema: JSONSchema;
   examples?: any[];
+  renderingMetadata?: ComponentRenderingMetadata;
 }
 
 /**
@@ -71,6 +79,9 @@ export interface ThemeConfig {
     codeBlockHeaderText?: string;
     codeBlockCopyButtonBg?: string;
     codeBlockCopyButtonText?: string;
+    // Skeleton colors
+    skeletonBase: string;
+    skeletonHighlight: string;
   };
   fonts: {
     body?: string;
@@ -174,6 +185,31 @@ export interface ProcessedMarkdown {
 }
 
 /**
+ * JSON cleanup step for debugging
+ */
+export interface JSONCleanupStep {
+  step: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * Component extraction state for debugging
+ */
+export interface ComponentExtractionState {
+  completeComponents: Array<{ name: string; fields: string[] }>;
+  partialComponents: Array<{ name: string; fields: string[] }>;
+  emptyComponents: string[];
+  lastJSONCleanup?: {
+    original: string;
+    final: string;
+    steps: JSONCleanupStep[];
+    success: boolean;
+    error?: string;
+  };
+}
+
+/**
  * StreamdownRN component props
  */
 export interface StreamdownRNProps {
@@ -191,5 +227,7 @@ export interface StreamdownRNProps {
   style?: ViewStyle;
   /** Callback for state updates (dev/debugging only) */
   onStateUpdate?: (state: IncompleteTagState) => void;
+  /** Callback for component extraction updates (dev/debugging only) */
+  onComponentExtractionUpdate?: (state: ComponentExtractionState) => void;
 }
 
