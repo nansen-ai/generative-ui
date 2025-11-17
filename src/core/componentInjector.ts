@@ -258,6 +258,7 @@ export function extractPartialComponents(
   const components: ComponentInstance[] = [];
   let processedMarkdown = markdown;
   lastJSONCleanupDebug = null; // Reset for this extraction
+  let positionOffset = 0; // Track how positions shift after replacements
 
   // Pattern to find component start: {{c:"Name",p:
   const componentStartPattern = /\{\{c:\s*"([^"]+)"\s*,\s*p:\s*/g;
@@ -530,19 +531,31 @@ export function extractPartialComponents(
       });
       
       // Replace with placeholder marker
-      console.log('🔄 Replacing in markdown:', {
-        fullMatch: fullMatch,
+      // IMPORTANT: Adjust match.index by positionOffset since previous replacements shifted positions
+      const marker = `\`__PARTIAL_COMPONENT__${componentId}__${componentName}__\``;
+      const beforeReplacement = processedMarkdown;
+      const matchIndexInProcessed = match.index + positionOffset;
+      
+      processedMarkdown = 
+        processedMarkdown.substring(0, matchIndexInProcessed) +
+        marker +
+        processedMarkdown.substring(matchIndexInProcessed + fullMatch.length);
+      
+      // Update offset: new marker length - old match length
+      const lengthDelta = marker.length - fullMatch.length;
+      positionOffset += lengthDelta;
+      
+      console.log('🔄 Replaced partial component:', {
+        componentName,
+        originalPosition: match.index,
+        adjustedPosition: matchIndexInProcessed,
+        positionOffset,
+        lengthDelta,
         fullMatchLength: fullMatch.length,
-        markdownLength: processedMarkdown.length,
-        contained: processedMarkdown.includes(fullMatch)
+        markerLength: marker.length,
+        beforeLength: beforeReplacement.length,
+        afterLength: processedMarkdown.length
       });
-      
-      processedMarkdown = processedMarkdown.replace(
-        fullMatch,
-        `\`__PARTIAL_COMPONENT__${componentId}__${componentName}__\``
-      );
-      
-      console.log('✅ After replacement, markdown length:', processedMarkdown.length);
       
     } catch (error) {
       console.log('⏳ Props not yet parseable:', componentName, error);
