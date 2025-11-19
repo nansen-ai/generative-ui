@@ -5,12 +5,12 @@
  * inspired by Vercel's Streamdown but built specifically for React Native.
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import { View, Text } from 'react-native';
 
-import { StreamdownRNProps, ThemeConfig, ComponentInstance } from './core/types';
-import { optimizeForStreaming } from './core/parseIncomplete';
-import { extractComponents, injectComponentPlaceholders } from './core/componentInjector';
+import { StreamdownRNProps, ThemeConfig, ComponentInstance, INITIAL_INCOMPLETE_STATE } from './core/types';
+import { optimizeForStreaming, updateIncompleteTagState } from './core/parseIncomplete';
+import { extractComponents, extractPartialComponents, injectComponentPlaceholders, getLastJSONCleanup } from './core/componentInjector';
 import { darkTheme, darkMarkdownStyles } from './themes/dark';
 import { lightTheme, lightMarkdownStyles } from './themes/light';
 import { MarkdownRenderer } from './renderers/MarkdownRenderer';
@@ -63,40 +63,109 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
   styleOverrides,
   onComponentError,
   style,
+  onStateUpdate,
+  onComponentExtractionUpdate,
 }) => {
+  // Maintain incomplete tag state for performance optimization
+  const incompleteTagStateRef = useRef(INITIAL_INCOMPLETE_STATE);
+  
   console.log('🚀 StreamdownRN called with:', {
     textLength: children?.length || 0,
     textPreview: children?.substring(0, 200),
     hasRegistry: !!componentRegistry,
-    theme
+    theme,
+    stateStackSize: incompleteTagStateRef.current.stack.length,
+    earliestPosition: incompleteTagStateRef.current.earliestPosition,
   });
 
   // Process markdown with streaming optimizations
   const processedContent = useMemo(() => {
     if (!children || children.length === 0) {
+      // Reset state when content is empty
+      incompleteTagStateRef.current = INITIAL_INCOMPLETE_STATE;
       return { markdown: '', components: [] };
     }
 
     console.log('🔄 Processing markdown content...');
+    
+    // Update incomplete tag state incrementally
+    const newState = updateIncompleteTagState(incompleteTagStateRef.current, children);
+    incompleteTagStateRef.current = newState;
+    
+    // Notify state update callback (for debugging)
+    if (onStateUpdate) {
+      onStateUpdate(newState);
+    }
+    
+    console.log('📊 Incomplete tag state:', {
+      stackSize: newState.stack.length,
+      earliestPosition: newState.earliestPosition,
+      tagCounts: newState.tagCounts,
+      processingFromPosition: newState.earliestPosition,
+    });
 
-    // Fix incomplete markdown for streaming
-    const optimizedMarkdown = optimizeForStreaming(children);
+    // IMPORTANT: Extract partial components FIRST (before hiding incomplete syntax)
+    const partialResult = extractPartialComponents(children, componentRegistry);
+    
+    console.log('📊 Partial components extraction (BEFORE optimization):', {
+      componentsFound: partialResult.components.length,
+      componentNames: partialResult.components.map(c => c.name),
+      availableFields: partialResult.components.map(c => Object.keys(c.props))
+    });
+    
+    // Fix incomplete markdown for streaming (pass state and registry for optimization)
+    const optimizedMarkdown = optimizeForStreaming(partialResult.markdown, newState, componentRegistry);
     
     console.log('✅ Optimized markdown:', optimizedMarkdown.substring(0, 300));
     
-    // Extract and process components
-    const result = extractComponents(optimizedMarkdown, componentRegistry, onComponentError);
+    // Extract complete components
+    const completeResult = extractComponents(optimizedMarkdown, componentRegistry, onComponentError);
     
-    console.log('📊 Extraction result:', {
-      componentsFound: result.components.length,
-      componentNames: result.components.map(c => c.name)
+    console.log('📊 Complete components extraction:', {
+      componentsFound: completeResult.components.length,
+      componentNames: completeResult.components.map(c => c.name)
     });
+    
+    // Combine results: partials first (so they render before complete ones)
+    const result = {
+      markdown: completeResult.markdown,
+      components: [...partialResult.components, ...completeResult.components],
+    };
+    
+    console.log('📊 Total extraction result:', {
+      partialComponents: partialResult.components.length,
+      completeComponents: completeResult.components.length,
+      totalComponents: result.components.length
+    });
+    
+    // Notify component extraction update (for debugging)
+    if (onComponentExtractionUpdate) {
+      // Check for empty components in the markdown
+      const emptyComponentMarkers = optimizedMarkdown.match(/__EMPTY_COMPONENT__([^_]+)__/g) || [];
+      const emptyComponents = emptyComponentMarkers.map(marker => {
+        const match = marker.match(/__EMPTY_COMPONENT__([^_]+)__/);
+        return match ? match[1] : '';
+      }).filter(Boolean);
+      
+      onComponentExtractionUpdate({
+        emptyComponents,
+        partialComponents: partialResult.components.map(c => ({
+          name: c.name,
+          fields: Object.keys(c.props).filter(k => k !== '_theme'),
+        })),
+        completeComponents: completeResult.components.map(c => ({
+          name: c.name,
+          fields: Object.keys(c.props).filter(k => k !== '_theme'),
+        })),
+        lastJSONCleanup: getLastJSONCleanup(),
+      });
+    }
     
     return result;
   }, [children, componentRegistry, onComponentError]);
 
   // Get theme configuration with style overrides
-  const { markdownStyles } = useMemo(() => {
+  const { config: themeConfig, markdownStyles } = useMemo(() => {
     return getTheme(theme, styleOverrides);
   }, [theme, styleOverrides]);
 
@@ -119,55 +188,95 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
       
       // Render error fallback inline
       return (
-        <Text key={id} style={{ color: '#ff3333', fontSize: 14 }}>
+        <Text key={id} style={{ color: themeConfig.colors.link, fontSize: 14 }}>
           ⚠️ Error: {name}
         </Text>
       );
     }
-  }, [onComponentError]);
+  }, [onComponentError, themeConfig]);
 
   // Custom markdown rules for component injection and code blocks
   const customRules = useMemo(() => {
     const rules: any = {};
 
-    if (processedContent.components.length > 0) {
-      // Create a map of components by ID for quick lookup
-      const componentMap = new Map(
-        processedContent.components.map(comp => [comp.id, comp])
-      );
+    // Create a map of components by ID for quick lookup
+    const componentMap = new Map(
+      processedContent.components.map(comp => [comp.id, comp])
+    );
 
-      // Custom inline code renderer to intercept component markers
-      rules.code_inline = (node: any, _children: any, _parent: any, styles: any) => {
+    // Custom inline code renderer to intercept component and skeleton markers
+    // Always add this rule (even with 0 components) to handle skeleton markers
+    rules.code_inline = (node: any, _children: any, _parent: any, styles: any) => {
         const codeContent = node.content || '';
         
         console.log('💻 code_inline rule triggered:', {
           content: codeContent,
-          isComponentMarker: /__COMPONENT__/.test(codeContent)
+          isComponentMarker: /__COMPONENT__/.test(codeContent),
+          isSkeletonMarker: /__SKELETON__/.test(codeContent)
         });
 
-        // Check if this is a component marker
+        // Check if this is an empty component marker (component with no props yet)
+        const emptyComponentMatch = codeContent.match(/__EMPTY_COMPONENT__([^_]+)__/);
+        if (emptyComponentMatch && componentRegistry) {
+          const componentName = emptyComponentMatch[1];
+          const componentDef = componentRegistry.get(componentName);
+          
+          console.log('💀 Found empty component marker for:', componentName);
+          
+          if (componentDef) {
+            console.log('✅ Rendering empty component (all fields will be skeletons):', componentName);
+            const Component = componentDef.component;
+            const propsWithTheme = { _theme: themeConfig };
+            return <Component key={node.key} {...propsWithTheme} />;
+          }
+        }
+
+        // Check if this is a partial component marker
+        const partialMatch = codeContent.match(/__PARTIAL_COMPONENT__([^_]+)__([^_]+)__/);
+        if (partialMatch) {
+          const componentId = partialMatch[1];
+          const componentName = partialMatch[2];
+          
+          console.log('🔄 Found partial component marker:', { componentId, componentName });
+          
+          const componentInstance = componentMap.get(componentId);
+          
+          if (componentInstance) {
+            console.log('✅ Rendering partial component:', componentInstance.name, 'with fields:', Object.keys(componentInstance.props));
+            // Pass theme to component via props
+            const propsWithTheme = { ...componentInstance.props, _theme: themeConfig };
+            const Component = componentInstance.component;
+            return <Component key={componentId} {...propsWithTheme} />;
+          }
+        }
+        
+        // Check if this is a complete component marker
         const markerMatch = codeContent.match(/__COMPONENT__([^_]+)__([^_]+)__/);
         
         if (markerMatch) {
           const componentId = markerMatch[1];
           const componentName = markerMatch[2];
           
-          console.log('🎯 Found component marker in code_inline:', { componentId, componentName });
+          console.log('🎯 Found complete component marker:', { componentId, componentName });
           
           const componentInstance = componentMap.get(componentId);
           
           if (componentInstance) {
-            console.log('✅ Rendering component inline:', componentInstance.name);
-            return renderComponent(componentInstance);
+            console.log('✅ Rendering complete component:', componentInstance.name);
+            // Pass theme to component via props
+            const propsWithTheme = { ...componentInstance.props, _theme: themeConfig };
+            const Component = componentInstance.component;
+            return <Component key={componentId} {...propsWithTheme} />;
           } else {
             console.warn('⚠️ Component not found in map:', componentId);
           }
         }
         
-        // Not a component marker, render as regular inline code
+        // Not a component or skeleton marker, render as regular inline code
         return <Text key={node.key} style={styles.code_inline}>{codeContent}</Text>;
       };
 
+    if (processedContent.components.length > 0) {
       // Custom paragraph renderer that keeps components inline
       rules.paragraph = (node: any, children: any, _parent: any, styles: any) => {
         // DEBUG: Log what we receive
@@ -264,14 +373,13 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
     rules.fence = (node: any, _children: any, _parent: any, _styles: any) => {
       const language = node.sourceInfo || '';
       const code = node.content || '';
-      const currentTheme = typeof theme === 'string' ? theme : 'dark';
       
       return (
         <CodeBlock
           key={node.key}
           code={code}
           language={language}
-          theme={currentTheme}
+          theme={themeConfig}
         />
       );
     };
@@ -288,7 +396,7 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
     };
 
     return rules;
-  }, [processedContent.components, renderComponent, theme]);
+  }, [processedContent.components, renderComponent, themeConfig]);
 
   // Prepare markdown with component placeholders
   const markdownWithPlaceholders = useMemo(() => {
