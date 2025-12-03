@@ -123,7 +123,7 @@ This monorepo is optimized for AI-assisted development. See **[AGENTS.md](./AGEN
 
 ---
 
-## Star History
+## Stars
 
 [![Star History Chart](https://api.star-history.com/svg?repos=darkresearch/generative-ui&type=Date)](https://star-history.com/#darkresearch/generative-ui&Date)
 
