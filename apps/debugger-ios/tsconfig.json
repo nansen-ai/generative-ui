@@ -1,0 +1,18 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "galerie-rn": [
+        "../../packages/galerie-rn/src"
+      ],
+      "streamdown-rn": [
+        "../../packages/streamdown-rn/src"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

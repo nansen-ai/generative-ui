@@ -33,14 +33,17 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install Dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
+
+      - name: Build packages
+        run: bun run build
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: npm run release
-          version: npm run version
+          publish: bun run release
+          version: bun run version
           commit: 'chore: version packages'
           title: 'chore: version packages'
         env:
