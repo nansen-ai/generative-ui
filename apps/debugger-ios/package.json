@@ -34,7 +34,7 @@
     "react-native-unistyles": "^3.0.18",
     "react-native-web": "^0.21.2",
     "react-native-worklets": "^0.6.1",
-    "streamdown-rn": "workspace:*"
+    "@nansen-ai/streamdown-rn": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { StyleSheet, UnistylesRuntime } from 'react-native-unistyles';
-import { StreamdownRN } from 'streamdown-rn';
+import { StreamdownRN } from '@nansen-ai/streamdown-rn';
 import { debugComponentRegistry } from '@darkresearch/debug-components';
 import { ListPickerScreen, ListType } from './screens/ListPickerScreen';
 import { ChatTestScreen } from './screens/ChatTestScreen';
