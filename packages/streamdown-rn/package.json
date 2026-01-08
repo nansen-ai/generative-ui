@@ -1,5 +1,5 @@
 {
-  "name": "streamdown-rn",
+  "name": "@nansen-ai/streamdown-rn",
   "version": "0.2.1",
   "description": "High-performance streaming markdown renderer for React Native with dynamic component injection",
   "main": "dist/index.js",
@@ -8,8 +8,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/darkresearch/generative-ui.git",
+    "url": "https://github.com/nansen-ai/generative-ui.git",
     "directory": "packages/streamdown-rn"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "keywords": [
     "react-native",
