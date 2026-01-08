@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/debugger",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "main": "./src/index.js",
   "scripts": {
     "start": "bunx expo start",
@@ -13,7 +13,7 @@
   "dependencies": {
     "@babel/runtime": "^7.28.4",
     "@darkresearch/debug-components": "workspace:*",
-    "streamdown-rn": "workspace:*",
+    "@nansen-ai/streamdown-rn": "workspace:*",
     "@expo-google-fonts/geist": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@react-native-vector-icons/lucide": "^12.4.0",

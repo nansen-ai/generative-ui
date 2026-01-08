@@ -3,7 +3,7 @@ import { View, Text, Pressable, TextInput, Image } from 'react-native';
 import { StyleSheet, UnistylesRuntime } from 'react-native-unistyles';
 import { FlashList } from '@shopify/flash-list';
 import { LegendList } from '@legendapp/list';
-import { StreamdownRN } from 'streamdown-rn';
+import { StreamdownRN } from '@nansen-ai/streamdown-rn';
 import Markdown from 'react-native-markdown-display';
 import { debugComponentRegistry } from '@darkresearch/debug-components';
 

@@ -6,7 +6,7 @@
       "galerie-rn": [
         "../../packages/galerie-rn/src"
       ],
-      "streamdown-rn": [
+      "@nansen-ai/streamdown-rn": [
         "../../packages/streamdown-rn/src"
       ]
     }

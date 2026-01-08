@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/debugger-ios",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "main": "./src/index.js",
   "scripts": {
     "start": "bunx expo start --port 8082 --host lan",
@@ -34,7 +34,7 @@
     "react-native-unistyles": "^3.0.18",
     "react-native-web": "^0.21.2",
     "react-native-worklets": "^0.6.1",
-    "streamdown-rn": "workspace:*"
+    "@nansen-ai/streamdown-rn": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",

@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { StyleSheet, UnistylesRuntime } from 'react-native-unistyles';
-import { StreamdownRN, type DebugSnapshot } from 'streamdown-rn';
+import { StreamdownRN, type DebugSnapshot } from '@nansen-ai/streamdown-rn';
 import { debugComponentRegistry } from '@darkresearch/debug-components';
 import { PRESETS } from './presets';
 
