@@ -9,7 +9,7 @@
  */
 
 import { Platform } from 'react-native';
-import type { ThemeConfig, ThemeColors } from '../core/types';
+import type { ThemeConfig, ThemeColors, ThemeFontSizes } from '../core/types';
 
 // ============================================================================
 // Color Palettes
@@ -56,6 +56,21 @@ const lightColors: ThemeColors = {
 };
 
 // ============================================================================
+// Default Font Sizes
+// ============================================================================
+
+const defaultFontSizes: ThemeFontSizes = {
+  body: 16,
+  heading1: 28,
+  heading2: 24,
+  heading3: 20,
+  heading4: 18,
+  heading5: 16,
+  heading6: 14,
+  code: 14,
+};
+
+// ============================================================================
 // Font Configuration
 // ============================================================================
 
@@ -89,12 +104,14 @@ const spacing = {
 export const darkTheme: ThemeConfig = {
   colors: darkColors,
   fonts,
+  fontSizes: defaultFontSizes,
   spacing,
 };
 
 export const lightTheme: ThemeConfig = {
   colors: lightColors,
   fonts,
+  fontSizes: defaultFontSizes,
   spacing,
 };
 
@@ -115,85 +132,92 @@ export function getTheme(theme: 'dark' | 'light' | ThemeConfig): ThemeConfig {
  * 
  * Font-agnostic: Only applies fontFamily when explicitly set in theme.
  * This allows host apps to set fonts at the root level and have them inherited.
+ * 
+ * Uses theme.fontSizes when provided, falls back to defaults.
  */
 export function getTextStyles(theme: ThemeConfig) {
   // Helper to conditionally include fontFamily
   const withFont = (fontKey: 'regular' | 'bold' | 'mono') => 
     theme.fonts[fontKey] ? { fontFamily: theme.fonts[fontKey] } : {};
 
+  // Get font sizes from theme or use defaults
+  const sizes = theme.fontSizes ?? defaultFontSizes;
+
   return {
     body: {
       color: theme.colors.foreground,
       ...withFont('regular'),
-      fontSize: 16,
-      lineHeight: 24,
+      fontSize: sizes.body,
+      lineHeight: sizes.body * 1.5,
     },
     heading1: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 28,
-      lineHeight: 36,
+      fontSize: sizes.heading1,
+      lineHeight: sizes.heading1 * 1.3,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     heading2: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 24,
-      lineHeight: 32,
+      fontSize: sizes.heading2,
+      lineHeight: sizes.heading2 * 1.3,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     heading3: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 20,
-      lineHeight: 28,
+      fontSize: sizes.heading3,
+      lineHeight: sizes.heading3 * 1.4,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     heading4: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 18,
-      lineHeight: 26,
+      fontSize: sizes.heading4,
+      lineHeight: sizes.heading4 * 1.45,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     heading5: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 16,
-      lineHeight: 24,
+      fontSize: sizes.heading5,
+      lineHeight: sizes.heading5 * 1.5,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     heading6: {
       color: theme.colors.foreground,
       ...withFont('bold'),
-      fontSize: 14,
-      lineHeight: 22,
+      fontSize: sizes.heading6,
+      lineHeight: sizes.heading6 * 1.55,
       fontWeight: 'bold' as const,
       marginBottom: theme.spacing.block,
     },
     paragraph: {
       color: theme.colors.foreground,
       ...withFont('regular'),
-      fontSize: 16,
-      lineHeight: 24,
+      fontSize: sizes.body,
+      lineHeight: sizes.body * 1.5,
       marginBottom: theme.spacing.block,
     },
     bold: {
+      color: theme.colors.foreground,
       ...withFont('bold'),
       fontWeight: 'bold' as const,
     },
     italic: {
+      color: theme.colors.foreground,
       fontStyle: 'italic' as const,
       // No fontFamily - inherits from parent, allowing platform italic to work
     },
     code: {
       ...withFont('mono'),
-      fontSize: 14,
+      fontSize: sizes.code,
       color: theme.colors.codeForeground,
       backgroundColor: theme.colors.codeBackground,
       paddingHorizontal: 4,
@@ -205,6 +229,7 @@ export function getTextStyles(theme: ThemeConfig) {
       textDecorationLine: 'underline' as const,
     },
     strikethrough: {
+      color: theme.colors.foreground,
       textDecorationLine: 'line-through' as const,
     },
   };

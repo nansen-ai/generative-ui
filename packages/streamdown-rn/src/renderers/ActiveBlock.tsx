@@ -20,6 +20,8 @@ interface ActiveBlockProps {
   tagState: IncompleteTagState;
   theme: ThemeConfig;
   componentRegistry?: ComponentRegistry;
+  selectable?: boolean;
+  onLinkPress?: (url: string) => void;
 }
 
 /**
@@ -33,6 +35,8 @@ export const ActiveBlock: React.FC<ActiveBlockProps> = ({
   tagState,
   theme,
   componentRegistry,
+  selectable = false,
+  onLinkPress,
 }) => {
   // No active block — nothing to render
   if (!block || !block.content.trim()) {
@@ -67,6 +71,8 @@ export const ActiveBlock: React.FC<ActiveBlockProps> = ({
         theme={theme}
         componentRegistry={componentRegistry}
         isStreaming={true}
+        selectable={selectable}
+        onLinkPress={onLinkPress}
       />
     );
   }

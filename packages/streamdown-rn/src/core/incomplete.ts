@@ -269,8 +269,9 @@ function rebuildTagState(fullText: string): IncompleteTagState {
       continue;
     }
     
-    // === Strikethrough: ~~ or ~ ===
-    // Support both single and double tilde (remark-gfm parses both as strikethrough)
+    // === Strikethrough: ~~ only ===
+    // Only support double tilde (~~) for strikethrough to avoid false positives
+    // during streaming when single ~ appears in content like ~100, ~/path, etc.
     if (fullText.slice(i, i + 2) === '~~') {
       const strikeIdx = stack.findIndex(t => t.type === 'strikethrough');
       if (strikeIdx !== -1) {
@@ -282,30 +283,16 @@ function rebuildTagState(fullText: string): IncompleteTagState {
       continue;
     }
     
-    // Single ~ also opens/closes strikethrough
-    if (fullText[i] === '~') {
-      const strikeTag = stack.find(t => t.type === 'strikethrough');
-      const isLastChar = i === fullText.length - 1;
-      
-      // SPECIAL CASE: If strikethrough was opened with ~~ and this is the last character,
-      // this ~ is likely the start of the closing ~~ (user still typing)
-      if (strikeTag && strikeTag.marker === '~~' && isLastChar) {
-        // Skip - treat as partial closer
+    // Handle single ~ at end of text when ~~ strikethrough is open (partial closer)
+    // This preserves the partial-closer detection for ~~ but removes single-tilde strikethrough
+    if (fullText[i] === '~' && i === fullText.length - 1) {
+      const strikeTag = stack.find(t => t.type === 'strikethrough' && t.marker === '~~');
+      if (strikeTag) {
+        // This ~ is likely the start of the closing ~~ (user still typing)
+        // Don't add to stack, just skip
         i++;
         continue;
       }
-      
-      if (strikeTag) {
-        // Only close if markers match, or if single ~ closes single ~
-        if (strikeTag.marker === '~') {
-          removeTagFromStack(stack, tagCounts, 'strikethrough');
-        }
-        // If marker is ~~, don't close with single ~ (mismatched)
-      } else {
-        earliestPosition = addTagToStack(stack, tagCounts, 'strikethrough', i, '~', earliestPosition);
-      }
-      i++;
-      continue;
     }
     
     // === Link: [text](url) ===
@@ -545,15 +532,15 @@ function hideIncompleteMarkers(text: string): string {
     result = result.replace(/(^|[\s\n])\*\*$/g, '$1');
   }
   
-  // Empty strikethrough patterns (order matters: longer patterns first)
+  // Empty strikethrough patterns - only double tilde (~~) is supported
   // "~~~~" = double tilde open (~~) + double tilde close (~~)
   result = result.replace(/(^|[\s\n])~~~~$/g, '$1');
   
-  // "~~" = single tilde open (~) + single tilde close (~)
+  // "~~" = double tilde with no content (incomplete strikethrough)
   result = result.replace(/(^|[\s\n])~~$/g, '$1');
   
-  // Single tilde at end (incomplete strikethrough)
-  result = result.replace(/(^|[\s\n])~$/g, '$1');
+  // NOTE: Single tilde (~) is NOT treated as strikethrough anymore
+  // to avoid false positives during streaming (e.g., ~100, ~/path)
   
   // === Hide pending backticks (building toward ``` or closing ```) ===
   

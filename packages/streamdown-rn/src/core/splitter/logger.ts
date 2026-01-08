@@ -1,18 +1,10 @@
 declare const __DEV__: boolean | undefined;
 
-const LOG_PREFIX = '[streamdown-rn]';
-
-export const logDebug = (...args: unknown[]) => {
-  const inDev =
-    typeof __DEV__ !== 'undefined'
-      ? __DEV__
-      : typeof process !== 'undefined'
-      ? process.env.NODE_ENV !== 'production'
-      : true;
-  if (!inDev) return;
-  if (typeof console !== 'undefined' && console.log) {
-    console.log(LOG_PREFIX, ...args);
-  }
+// Disabled debug logging to reduce console spam
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const logDebug = (..._args: unknown[]) => {
+  // Intentionally disabled - streamdown-rn logs too verbose for dev
+  return;
 };
 
 export const logStateSnapshot = (

@@ -33,7 +33,7 @@ import { ActiveBlock } from './renderers/ActiveBlock';
  * 
  * @example
  * ```tsx
- * <StreamdownRN theme="dark">
+ * <StreamdownRN theme="dark" selectable>
  *   {streamingMarkdownContent}
  * </StreamdownRN>
  * ```
@@ -46,6 +46,8 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
   onError,
   onDebug,
   isComplete = false,
+  selectable = false,
+  onLinkPress,
 }) => {
   // Persistent registry reference — survives across renders
   const registryRef = useRef<BlockRegistry>(INITIAL_REGISTRY);
@@ -172,6 +174,8 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
           block={block}
           theme={themeConfig}
           componentRegistry={componentRegistry}
+          selectable={selectable}
+          onLinkPress={onLinkPress}
         />
       ))}
       
@@ -181,16 +185,20 @@ export const StreamdownRN: React.FC<StreamdownRNProps> = React.memo(({
         tagState={registry.activeTagState}
         theme={themeConfig}
         componentRegistry={componentRegistry}
+        selectable={selectable}
+        onLinkPress={onLinkPress}
       />
     </View>
   );
 }, (prev, next) => {
   // Custom comparison for memo
-  // Re-render if content, theme, or isComplete changes
+  // Re-render if content, theme, isComplete, selectable, or onLinkPress changes
   return (
     prev.children === next.children &&
     prev.theme === next.theme &&
-    prev.isComplete === next.isComplete
+    prev.isComplete === next.isComplete &&
+    prev.selectable === next.selectable &&
+    prev.onLinkPress === next.onLinkPress
   );
 });
 

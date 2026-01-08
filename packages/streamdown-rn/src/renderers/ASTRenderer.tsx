@@ -11,14 +11,59 @@
  * - Syntax highlighting for code blocks
  */
 
-import React, { ReactNode, useState, useEffect } from 'react';
-import { Text, View, ScrollView, Image, Platform } from 'react-native';
+import type { Code as CodeNode, Content, Image as ImageNode, Link as LinkNode, List as ListNode, Parent, Table as TableNode } from 'mdast';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { Image, Platform, ScrollView, Text, TextProps, View } from 'react-native';
 import SyntaxHighlighter from 'react-native-syntax-highlighter';
-import type { Content, Parent, Table as TableNode, Code as CodeNode, List as ListNode, Image as ImageNode, Link as LinkNode } from 'mdast';
-import type { ThemeConfig, ComponentRegistry, StableBlock } from '../core/types';
-import { getTextStyles, getBlockStyles } from '../themes';
+import { UITextView } from 'react-native-uitextview';
 import { extractComponentData, type ComponentData } from '../core/componentParser';
 import { sanitizeURL } from '../core/sanitize';
+import type { ComponentRegistry, StableBlock, ThemeConfig } from '../core/types';
+import { getBlockStyles, getTextStyles } from '../themes';
+
+// ============================================================================
+// Selectable Text Component
+// ============================================================================
+
+/**
+ * Check if an AST node contains any link children (recursively)
+ */
+function nodeContainsLinks(node: Content): boolean {
+  if (!node) return false;
+  if (node.type === 'link') return true;
+  if ('children' in node && node.children) {
+    return node.children.some(child => nodeContainsLinks(child as Content));
+  }
+  return false;
+}
+
+/**
+ * SelectableText - A smart Text component that uses UITextView on iOS for proper
+ * partial text selection, and falls back to regular Text on other platforms.
+ * 
+ * Note: UITextView doesn't support nested React Native components well,
+ * so we use regular Text when the content contains links.
+ */
+const SelectableText: React.FC<TextProps & { 
+  selectable?: boolean; 
+  hasLinks?: boolean;
+  children?: React.ReactNode;
+}> = ({ selectable = false, children, onPress, hasLinks = false, ...props }) => {
+  // If content has links or onPress, use regular Text (UITextView doesn't support these)
+  if (hasLinks || onPress) {
+    return <Text {...props} selectable={selectable} onPress={onPress}>{children}</Text>;
+  }
+  // On iOS with selectable=true, use UITextView for proper partial text selection
+  if (Platform.OS === 'ios' && selectable) {
+    return (
+      <UITextView {...props} selectable uiTextView>
+        {children}
+      </UITextView>
+    );
+  }
+  // On Android or when not selectable, use regular Text
+  return <Text {...props} selectable={selectable}>{children}</Text>;
+};
 
 // ============================================================================
 // Syntax Highlighting Utilities
@@ -95,6 +140,10 @@ export interface ASTRendererProps {
   componentRegistry?: ComponentRegistry;
   /** Whether this is streaming (for components) */
   isStreaming?: boolean;
+  /** Enable text selection for copy/paste */
+  selectable?: boolean;
+  /** Callback for when a link is pressed */
+  onLinkPress?: (url: string) => void;
 }
 
 /**
@@ -107,8 +156,10 @@ export const ASTRenderer: React.FC<ASTRendererProps> = ({
   theme,
   componentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress,
 }) => {
-  return <>{renderNode(node, theme, componentRegistry, isStreaming)}</>;
+  return <>{renderNode(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}</>;
 };
 
 // ============================================================================
@@ -123,10 +174,13 @@ function renderNode(
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
   const blockStyles = getBlockStyles(theme);
+  const hasLinks = nodeContainsLinks(node);
   
   switch (node.type) {
     // ========================================================================
@@ -135,34 +189,34 @@ function renderNode(
     
     case 'paragraph':
       return (
-        <Text key={key} style={styles.paragraph}>
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
-        </Text>
+        <SelectableText key={key} style={styles.paragraph} selectable={selectable} hasLinks={hasLinks}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        </SelectableText>
       );
     
     case 'heading':
       const headingStyle = styles[`heading${node.depth}` as keyof typeof styles];
       return (
-        <Text key={key} style={headingStyle}>
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
-        </Text>
+        <SelectableText key={key} style={headingStyle} selectable={selectable} hasLinks={hasLinks}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        </SelectableText>
       );
     
     case 'code':
-      return renderCodeBlock(node as CodeNode, theme, key);
+      return renderCodeBlock(node as CodeNode, theme, selectable, key);
     
     case 'blockquote':
-      return renderBlockquote(node, theme, componentRegistry, isStreaming, key);
+      return renderBlockquote(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, key);
     
     case 'list':
-      return renderList(node as ListNode, theme, componentRegistry, isStreaming, key);
+      return renderList(node as ListNode, theme, componentRegistry, isStreaming, selectable, onLinkPress, key);
     
     case 'listItem':
       return (
         <View key={key} style={{ flexDirection: 'row', marginBottom: 4 }}>
-          <Text style={styles.body}>• </Text>
+          <SelectableText style={styles.body} selectable={selectable}>• </SelectableText>
           <View style={{ flex: 1 }}>
-            {renderChildren(node, theme, componentRegistry, isStreaming)}
+            {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
           </View>
         </View>
       );
@@ -173,14 +227,14 @@ function renderNode(
       );
     
     case 'table':
-      return renderTable(node as TableNode, theme, componentRegistry, isStreaming, key);
+      return renderTable(node as TableNode, theme, componentRegistry, isStreaming, selectable, onLinkPress, key);
     
     case 'html':
       // Render HTML as plain text (React Native doesn't support HTML)
       return (
-        <Text key={key} style={[styles.code, { color: theme.colors.muted }]}>
+        <SelectableText key={key} style={[styles.code, { color: theme.colors.muted }]} selectable={selectable}>
           {node.value}
-        </Text>
+        </SelectableText>
       );
     
     // ========================================================================
@@ -190,66 +244,68 @@ function renderNode(
     case 'text':
       // Check if text contains inline component syntax
       if (node.value.includes('[{c:')) {
-        return renderTextWithComponents(node.value, theme, componentRegistry, isStreaming, key);
+        return renderTextWithComponents(node.value, theme, componentRegistry, isStreaming, selectable, onLinkPress, key);
       }
       return node.value;
     
     case 'strong':
       return (
-        <Text key={key} style={styles.bold}>
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
-        </Text>
+        <SelectableText key={key} style={styles.bold} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        </SelectableText>
       );
     
     case 'emphasis':
       return (
-        <Text key={key} style={styles.italic}>
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
-        </Text>
+        <SelectableText key={key} style={styles.italic} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        </SelectableText>
       );
     
     case 'delete':
       // GFM strikethrough
       return (
-        <Text key={key} style={styles.strikethrough}>
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
-        </Text>
+        <SelectableText key={key} style={styles.strikethrough} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        </SelectableText>
       );
     
     case 'inlineCode':
       return (
-        <Text key={key} style={styles.code}>
+        <SelectableText key={key} style={styles.code} selectable={selectable}>
           {node.value}
-        </Text>
+        </SelectableText>
       );
     
     case 'link': {
       // Sanitize URL to prevent XSS via javascript: or data: protocols
       const linkNode = node as LinkNode;
       const safeUrl = sanitizeURL(linkNode.url);
+      // Get link text directly from children
+      const linkText = node.children?.map(child => 
+        child.type === 'text' ? child.value : ''
+      ).join('') || '';
       
-      // If URL is dangerous, render children as plain text without link styling
+      // If URL is dangerous, render as plain text
       if (!safeUrl) {
-        return (
-          <Text key={key} style={styles.body}>
-            {renderChildren(node, theme, componentRegistry, isStreaming)}
-          </Text>
-        );
+        return linkText;
       }
       
+      // Always use regular Text for links (UITextView doesn't support onPress)
       return (
         <Text
           key={key}
           style={styles.link}
           accessibilityRole="link"
+          onPress={onLinkPress ? () => onLinkPress(safeUrl) : undefined}
         >
-          {renderChildren(node, theme, componentRegistry, isStreaming)}
+          {linkText}
         </Text>
       );
     }
     
     case 'image':
-      return renderImage(node as ImageNode, theme, key);
+      return renderImage(node as ImageNode, theme, selectable, key);
     
     case 'break':
       return '\n';
@@ -265,9 +321,9 @@ function renderNode(
     
     case 'footnoteReference':
       return (
-        <Text key={key} style={{ fontSize: 12 }}>
+        <SelectableText key={key} style={{ fontSize: 12 }} selectable={selectable}>
           [{node.identifier}]
-        </Text>
+        </SelectableText>
       );
     
     case 'footnoteDefinition':
@@ -290,14 +346,16 @@ function renderChildren(
   node: Parent,
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
-  isStreaming = false
+  isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void
 ): ReactNode {
   if (!('children' in node) || !node.children) {
     return null;
   }
   
   return node.children.map((child, index) =>
-    renderNode(child as Content, theme, componentRegistry, isStreaming, index)
+    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, index)
   );
 }
 
@@ -311,6 +369,7 @@ function renderChildren(
 function renderCodeBlock(
   node: CodeNode,
   theme: ThemeConfig,
+  selectable: boolean,
   key?: string | number
 ): ReactNode {
   const blockStyles = getBlockStyles(theme);
@@ -322,14 +381,14 @@ function renderCodeBlock(
   return (
     <View key={key} style={blockStyles.codeBlock}>
       {language && language !== 'text' && (
-        <Text style={{
+        <SelectableText style={{
           color: theme.colors.muted,
           fontSize: 12,
           marginBottom: 8,
           fontFamily: theme.fonts.mono,
-        }}>
+        }} selectable={selectable}>
           {language}
-        </Text>
+        </SelectableText>
       )}
       <ScrollView 
         horizontal 
@@ -370,6 +429,8 @@ function renderList(
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
@@ -379,12 +440,12 @@ function renderList(
     <View key={key} style={{ marginBottom: theme.spacing.block }}>
       {node.children.map((item, index) => (
         <View key={index} style={{ flexDirection: 'row', marginBottom: 4 }}>
-          <Text style={[styles.body, { width: 24 }]}>
+          <SelectableText style={[styles.body, { width: 24 }]} selectable={selectable}>
             {ordered ? `${index + 1}.` : '•'}
-          </Text>
+          </SelectableText>
           <View style={{ flex: 1 }}>
             {item.children.map((child, childIndex) =>
-              renderListItemChild(child as Content, theme, componentRegistry, isStreaming, childIndex)
+              renderListItemChild(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex)
             )}
           </View>
         </View>
@@ -402,16 +463,19 @@ function renderListItemChild(
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
+  const hasLinks = nodeContainsLinks(node);
   
   // For paragraphs inside list items, render without margin
   if (node.type === 'paragraph') {
     return (
-      <Text key={key} style={[styles.body, { marginBottom: 0 }]}>
-        {renderChildren(node, theme, componentRegistry, isStreaming)}
-      </Text>
+      <SelectableText key={key} style={[styles.body, { marginBottom: 0 }]} selectable={selectable} hasLinks={hasLinks}>
+        {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+      </SelectableText>
     );
   }
   
@@ -419,13 +483,13 @@ function renderListItemChild(
   if (node.type === 'list') {
     return (
       <View key={key} style={{ marginTop: 4, marginBottom: 0 }}>
-        {renderList(node as ListNode, theme, componentRegistry, isStreaming)}
+        {renderList(node as ListNode, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
       </View>
     );
   }
   
   // For other types, use normal rendering
-  return renderNode(node, theme, componentRegistry, isStreaming, key);
+  return renderNode(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, key);
 }
 
 /**
@@ -437,6 +501,8 @@ function renderBlockquote(
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
@@ -447,27 +513,30 @@ function renderBlockquote(
       {node.children?.map((child, index) => {
         // For paragraphs inside blockquotes, render without bottom margin
         if (child.type === 'paragraph') {
+          const hasLinks = nodeContainsLinks(child);
           return (
-            <Text key={index} style={[styles.body, { marginBottom: 0 }]}>
-              {renderChildren(child, theme, componentRegistry, isStreaming)}
-            </Text>
+            <SelectableText key={index} style={[styles.body, { marginBottom: 0 }]} selectable={selectable} hasLinks={hasLinks}>
+              {renderChildren(child, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+            </SelectableText>
           );
         }
         // For other types, use normal rendering
-        return renderNode(child, theme, componentRegistry, isStreaming, index);
+        return renderNode(child, theme, componentRegistry, isStreaming, selectable, onLinkPress, index);
       })}
     </View>
   );
 }
 
 /**
- * Render a table
+ * Render a table with horizontal scrolling support
  */
 function renderTable(
   node: TableNode,
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
@@ -479,46 +548,59 @@ function renderTable(
   const bodyRows = rows.slice(1);
   
   return (
-    <View key={key} style={{ marginBottom: theme.spacing.block }}>
-      {/* Header */}
-      <View style={{ 
-        flexDirection: 'row', 
-        borderBottomWidth: 2, 
-        borderBottomColor: theme.colors.border,
-        paddingBottom: 8,
-        marginBottom: 8,
-      }}>
-        {headerRow.children.map((cell, cellIndex) => (
-          <View key={cellIndex} style={{ flex: 1, paddingHorizontal: 8 }}>
-            <Text style={[styles.bold, { fontSize: 14 }]}>
-              {cell.children.map((child, childIndex) =>
-                renderNode(child as Content, theme, componentRegistry, isStreaming, childIndex)
-              )}
-            </Text>
+    <ScrollView 
+      key={key} 
+      horizontal 
+      showsHorizontalScrollIndicator={true} 
+      style={{ marginBottom: theme.spacing.block }}
+    >
+      <View>
+        {/* Header */}
+        <View style={{ 
+          flexDirection: 'row', 
+          borderBottomWidth: 2, 
+          borderBottomColor: theme.colors.border,
+          paddingVertical: 8,
+          marginBottom: 8,
+        }}>
+          {headerRow.children.map((cell, cellIndex) => {
+            const cellHasLinks = nodeContainsLinks(cell as unknown as Content);
+            return (
+              <View key={cellIndex} style={{ minWidth: 100, paddingHorizontal: 8 }}>
+                <SelectableText style={[styles.bold, { fontSize: 14 }]} selectable={selectable} hasLinks={cellHasLinks}>
+                  {cell.children.map((child, childIndex) =>
+                    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex)
+                  )}
+                </SelectableText>
+              </View>
+            );
+          })}
+        </View>
+        
+        {/* Body */}
+        {bodyRows.map((row, rowIndex) => (
+          <View key={rowIndex} style={{ 
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            paddingVertical: 8,
+          }}>
+            {row.children.map((cell, cellIndex) => {
+              const cellHasLinks = nodeContainsLinks(cell as unknown as Content);
+              return (
+                <View key={cellIndex} style={{ minWidth: 100, paddingHorizontal: 8 }}>
+                  <SelectableText style={styles.body} selectable={selectable} hasLinks={cellHasLinks}>
+                    {cell.children.map((child, childIndex) =>
+                      renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex)
+                    )}
+                  </SelectableText>
+                </View>
+              );
+            })}
           </View>
         ))}
       </View>
-      
-      {/* Body */}
-      {bodyRows.map((row, rowIndex) => (
-        <View key={rowIndex} style={{ 
-          flexDirection: 'row',
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
-          paddingVertical: 8,
-        }}>
-          {row.children.map((cell, cellIndex) => (
-            <View key={cellIndex} style={{ flex: 1, paddingHorizontal: 8 }}>
-              <Text style={styles.body}>
-                {cell.children.map((child, childIndex) =>
-                  renderNode(child as Content, theme, componentRegistry, isStreaming, childIndex)
-                )}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ))}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -584,6 +666,7 @@ function AutoSizedImage({
 function renderImage(
   node: ImageNode,
   theme: ThemeConfig,
+  selectable: boolean,
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
@@ -599,9 +682,9 @@ function renderImage(
     if (node.alt) {
       return (
         <View key={key} style={{ marginVertical: theme.spacing.block }}>
-          <Text style={[styles.body, { color: theme.colors.muted, textAlign: 'center' }]}>
+          <SelectableText style={[styles.body, { color: theme.colors.muted, textAlign: 'center' }]} selectable={selectable}>
             [Image: {node.alt}]
-          </Text>
+          </SelectableText>
         </View>
       );
     }
@@ -623,6 +706,8 @@ function renderTextWithComponents(
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void,
   key?: string | number
 ): ReactNode {
   // Look for inline components
@@ -641,7 +726,7 @@ function renderTextWithComponents(
     return (
       <>
         {before}
-        <Text style={{ color: theme.colors.muted }}>⚠️ [{name}]</Text>
+        <SelectableText style={{ color: theme.colors.muted }} selectable={selectable}>⚠️ [{name}]</SelectableText>
         {after}
       </>
     );
@@ -652,7 +737,7 @@ function renderTextWithComponents(
     return (
       <>
         {before}
-        <Text style={{ color: theme.colors.muted }}>⚠️ [{name}]</Text>
+        <SelectableText style={{ color: theme.colors.muted }} selectable={selectable}>⚠️ [{name}]</SelectableText>
         {after}
       </>
     );
@@ -664,7 +749,7 @@ function renderTextWithComponents(
     <>
       {before}
       <Component key={key} {...props} _isInline={true} _isStreaming={isStreaming} />
-      {renderTextWithComponents(after, theme, componentRegistry, isStreaming, `${key}-after`)}
+      {renderTextWithComponents(after, theme, componentRegistry, isStreaming, selectable, onLinkPress, `${key}-after`)}
     </>
   );
 }
@@ -831,7 +916,9 @@ export function renderAST(
   nodes: Content[],
   theme: ThemeConfig,
   componentRegistry?: ComponentRegistry,
-  isStreaming = false
+  isStreaming = false,
+  selectable = false,
+  onLinkPress?: (url: string) => void
 ): ReactNode {
-  return nodes.map((node, index) => renderNode(node, theme, componentRegistry, isStreaming, index));
+  return nodes.map((node, index) => renderNode(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, index));
 }

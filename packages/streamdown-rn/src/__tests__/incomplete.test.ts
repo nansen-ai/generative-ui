@@ -216,10 +216,10 @@ describe('Incomplete Markdown Handler', () => {
       expect(fix('~~strike')).toBe('~~strike~~');
     });
     
-    it('should show strikethrough formatting immediately when content starts (single tilde)', () => {
-      // Single tilde also works for strikethrough
-      expect(fix('~s')).toBe('~s~');
-      expect(fix('~strike')).toBe('~strike~');
+    it('should NOT treat single tilde as strikethrough (to avoid false positives)', () => {
+      // Single tilde is NOT strikethrough - prevents false positives like ~100, ~/path, etc.
+      expect(fix('~s')).toBe('~s');
+      expect(fix('~strike')).toBe('~strike');
     });
     
     it('should format bold in the middle of text', () => {
@@ -268,9 +268,10 @@ describe('Incomplete Markdown Handler', () => {
       expect(fix('**b*')).toBe('**b**');
     });
     
-    it('should handle single ~ as strikethrough closer', () => {
-      // Single ~ closes single ~ strikethrough
-      expect(fix('~strike~')).toBe('~strike~');    // Already closed!
+    it('should NOT handle single ~ as strikethrough (disabled to avoid false positives)', () => {
+      // Single ~ is not treated as strikethrough delimiter anymore
+      // This avoids false positives like ~100, ~/path, etc. during streaming
+      expect(fix('~strike~')).toBe('~strike~');    // Just regular text with tildes
     });
     
     it('should handle double ~~ as strikethrough closer', () => {
@@ -279,9 +280,10 @@ describe('Incomplete Markdown Handler', () => {
       expect(fix('This is ~~strike~~')).toBe('This is ~~strike~~');  // Already closed!
     });
     
-    it('should hide empty single tilde', () => {
-      expect(fix('~')).toBe('');
-      expect(fix('text ~')).toBe('text ');
+    it('should NOT hide single tilde (not treated as strikethrough)', () => {
+      // Single tilde is not treated as strikethrough, so it's kept as-is
+      expect(fix('~')).toBe('~');
+      expect(fix('text ~')).toBe('text ~');
     });
     
     it('should NOT treat trailing * as half closer when italic is also open', () => {
@@ -321,34 +323,35 @@ describe('Incomplete Markdown Handler', () => {
       expect(fix('Text ***both***')).toBe('Text ***both***'); // Complete
     });
     
-    it('should correctly handle strikethrough streaming (single tilde)', () => {
-      // Streaming ~strike~ character by character
-      expect(fix('~')).toBe('');           // Single ~ hidden (empty strikethrough)
-      expect(fix('~s')).toBe('~s~');       // Content starts - show strikethrough!
-      expect(fix('~st')).toBe('~st~');
-      expect(fix('~str')).toBe('~str~');
-      expect(fix('~stri')).toBe('~stri~');
-      expect(fix('~strik')).toBe('~strik~');
-      expect(fix('~strike')).toBe('~strike~');
-      expect(fix('~strike~')).toBe('~strike~'); // Complete!
+    it('should NOT treat single tilde as strikethrough during streaming', () => {
+      // Single tilde is NOT strikethrough - prevents false positives during streaming
+      // (e.g., content like "~100", "~/path", etc.)
+      expect(fix('~')).toBe('~');           // Single ~ kept as-is
+      expect(fix('~s')).toBe('~s');         // No auto-closing
+      expect(fix('~st')).toBe('~st');
+      expect(fix('~str')).toBe('~str');
+      expect(fix('~strike')).toBe('~strike');
+      expect(fix('~strike~')).toBe('~strike~'); // Just text with tildes
     });
     
     it('should correctly handle strikethrough streaming (double tilde)', () => {
       // Streaming ~~strike~~ character by character
-      expect(fix('~')).toBe('');             // Single ~ hidden
-      expect(fix('~~')).toBe('');            // ~~ hidden (empty strikethrough)
-      expect(fix('~~s')).toBe('~~s~~');      // Content starts - close with matching ~~
+      // Note: Single ~ is NOT strikethrough (kept as-is)
+      expect(fix('~')).toBe('~');             // Single ~ kept (not strikethrough)
+      expect(fix('~~')).toBe('');             // ~~ hidden (empty strikethrough)
+      expect(fix('~~s')).toBe('~~s~~');       // Content starts - close with matching ~~
       expect(fix('~~st')).toBe('~~st~~');
       expect(fix('~~strike')).toBe('~~strike~~');
       expect(fix('~~strike~')).toBe('~~strike~~'); // First ~ is partial closer
       expect(fix('~~strike~~')).toBe('~~strike~~'); // Complete!
     });
     
-    it('should correctly handle strikethrough in middle of text', () => {
-      expect(fix('Text ~')).toBe('Text ');           // Empty - hidden
-      expect(fix('Text ~s')).toBe('Text ~s~');       // Content starts
-      expect(fix('Text ~strike')).toBe('Text ~strike~');
-      expect(fix('Text ~strike~')).toBe('Text ~strike~'); // Complete
+    it('should NOT treat single tilde as strikethrough in middle of text', () => {
+      // Single tilde is not strikethrough - preserved as-is
+      expect(fix('Text ~')).toBe('Text ~');           // Kept as-is
+      expect(fix('Text ~s')).toBe('Text ~s');         // No auto-closing
+      expect(fix('Text ~strike')).toBe('Text ~strike');
+      expect(fix('Text ~strike~')).toBe('Text ~strike~'); // Just text
     });
   });
   

@@ -216,6 +216,20 @@ export interface ThemeColors {
 }
 
 /**
+ * Font sizes configuration
+ */
+export interface ThemeFontSizes {
+  body: number;
+  heading1: number;
+  heading2: number;
+  heading3: number;
+  heading4: number;
+  heading5: number;
+  heading6: number;
+  code: number;
+}
+
+/**
  * Theme configuration
  * 
  * Font-agnostic: regular and bold fonts are optional (undefined uses platform defaults).
@@ -228,6 +242,7 @@ export interface ThemeConfig {
     bold?: string;      // Optional - uses platform default if undefined
     mono: string;       // Required for code blocks
   };
+  fontSizes?: ThemeFontSizes; // Optional font sizes
   spacing: {
     block: number;      // Space between blocks
     inline: number;     // Inline element spacing
@@ -311,6 +326,10 @@ export interface StreamdownRNProps {
    * transition from skeleton to final state.
    */
   isComplete?: boolean;
+  /** Enable text selection for copy/paste */
+  selectable?: boolean;
+  /** Callback for when a link is pressed */
+  onLinkPress?: (url: string) => void;
 }
 
 /**

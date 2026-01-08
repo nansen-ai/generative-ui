@@ -13,6 +13,8 @@ interface StableBlockProps {
   block: StableBlockType;
   theme: ThemeConfig;
   componentRegistry?: ComponentRegistry;
+  selectable?: boolean;
+  onLinkPress?: (url: string) => void;
 }
 
 /**
@@ -22,7 +24,7 @@ interface StableBlockProps {
  * The block prop is immutable — once finalized, content never changes.
  */
 export const StableBlock: React.FC<StableBlockProps> = React.memo(
-  ({ block, theme, componentRegistry }) => {
+  ({ block, theme, componentRegistry, selectable = false, onLinkPress }) => {
     // Component blocks don't have AST (custom syntax, not markdown)
     if (block.type === 'component') {
       return (
@@ -41,6 +43,8 @@ export const StableBlock: React.FC<StableBlockProps> = React.memo(
           node={block.ast}
           theme={theme}
           componentRegistry={componentRegistry}
+          selectable={selectable}
+          onLinkPress={onLinkPress}
         />
       );
     }
@@ -49,10 +53,12 @@ export const StableBlock: React.FC<StableBlockProps> = React.memo(
     console.warn('StableBlock has no AST:', block.type, block.id);
     return null;
   },
-  // Re-render if block content or theme changes
+  // Re-render if block content, theme, selectable, or onLinkPress changes
   (prev, next) =>
     prev.block.contentHash === next.block.contentHash &&
-    prev.theme === next.theme
+    prev.theme === next.theme &&
+    prev.selectable === next.selectable &&
+    prev.onLinkPress === next.onLinkPress
 );
 
 StableBlock.displayName = 'StableBlock';
