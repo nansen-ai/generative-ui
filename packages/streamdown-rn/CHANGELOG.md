@@ -1,5 +1,11 @@
 # streamdown-rn
 
+## 0.2.3
+
+### Patch Changes
+
+- fix: table styles
+
 ## 0.2.2
 
 ### Patch Changes

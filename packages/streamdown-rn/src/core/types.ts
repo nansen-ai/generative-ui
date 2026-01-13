@@ -230,6 +230,30 @@ export interface ThemeFontSizes {
 }
 
 /**
+ * Table styling configuration
+ */
+export interface ThemeTableConfig {
+  /** Border width for row separators (default: 1) */
+  borderWidth?: number;
+  /** Border color - overrides colors.border for tables */
+  borderColor?: string;
+  /** Header bottom border width (default: same as borderWidth) */
+  headerBorderWidth?: number;
+  /** Outer table border width (default: 0) */
+  outerBorderWidth?: number;
+  /** Column separator width - vertical line between columns (default: 0) */
+  columnSeparatorWidth?: number;
+  /** Cell padding in pixels (default: 8) */
+  cellPadding?: number;
+  /** Fixed column width in pixels (default: 120) */
+  columnWidth?: number;
+  /** Header text color (default: colors.foreground) */
+  headerTextColor?: string;
+  /** Cell text color (default: colors.foreground) */
+  cellTextColor?: string;
+}
+
+/**
  * Theme configuration
  * 
  * Font-agnostic: regular and bold fonts are optional (undefined uses platform defaults).
@@ -248,6 +272,8 @@ export interface ThemeConfig {
     inline: number;     // Inline element spacing
     indent: number;     // List/blockquote indent
   };
+  /** Optional table styling configuration */
+  table?: ThemeTableConfig;
 }
 
 // ============================================================================

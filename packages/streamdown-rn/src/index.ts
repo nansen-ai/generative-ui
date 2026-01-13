@@ -10,20 +10,16 @@
 // Main Component
 // ============================================================================
 
-export { StreamdownRN, default } from './StreamdownRN';
+export { default, StreamdownRN } from './StreamdownRN';
 
 // ============================================================================
 // Skeleton Primitives (for building component skeletons)
 // ============================================================================
 
 export {
-  Skeleton,
-  SkeletonText,
-  SkeletonRect,
-  SkeletonCircle,
-  SkeletonNumber,
-  type SkeletonProps,
-  type SkeletonTextProps,
+  Skeleton, SkeletonCircle,
+  SkeletonNumber, SkeletonRect, SkeletonText, type SkeletonProps,
+  type SkeletonTextProps
 } from './components';
 
 // ============================================================================
@@ -31,22 +27,32 @@ export {
 // ============================================================================
 
 export {
-  sanitizeURL,
-  sanitizeProps,
+  sanitizeProps, sanitizeURL
 } from './core/sanitize';
+
+// ============================================================================
+// Theme Exports
+// ============================================================================
+
+export {
+  darkTheme, getBlockStyles, getTextStyles, getTheme, lightTheme
+} from './themes';
 
 // ============================================================================
 // Public Types
 // ============================================================================
 
 export type {
-  // Component props
-  StreamdownRNProps,
-  
+
   // Component injection (for custom component registries)
   ComponentDefinition,
   ComponentRegistry,
-  
   // Debug/Observability
   DebugSnapshot,
+  // Component props
+  StreamdownRNProps, ThemeColors,
+  // Theme configuration
+  ThemeConfig, ThemeFontSizes,
+  ThemeTableConfig
 } from './core/types';
+
