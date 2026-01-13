@@ -1,5 +1,13 @@
 # @darkresearch/debugger-ios
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @nansen-ai/streamdown-rn@0.2.3
+  - @darkresearch/debug-components@0.2.3
+
 ## 0.2.2
 
 ### Patch Changes
