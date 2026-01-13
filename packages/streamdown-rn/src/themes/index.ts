@@ -9,7 +9,7 @@
  */
 
 import { Platform } from 'react-native';
-import type { ThemeConfig, ThemeColors, ThemeFontSizes } from '../core/types';
+import type { ThemeColors, ThemeConfig, ThemeFontSizes } from '../core/types';
 
 // ============================================================================
 // Color Palettes
@@ -239,6 +239,18 @@ export function getTextStyles(theme: ThemeConfig) {
  * Generate block container styles for a theme
  */
 export function getBlockStyles(theme: ThemeConfig) {
+  // Extract table config with defaults
+  const tableConfig = theme.table ?? {};
+  const tableBorderWidth = tableConfig.borderWidth ?? 1;
+  const tableBorderColor = tableConfig.borderColor ?? theme.colors.border;
+  const headerBorderWidth = tableConfig.headerBorderWidth ?? tableBorderWidth;
+  const outerBorderWidth = tableConfig.outerBorderWidth ?? 0;
+  const columnSeparatorWidth = tableConfig.columnSeparatorWidth ?? 0;
+  const cellPadding = tableConfig.cellPadding ?? 8;
+  const columnWidth = tableConfig.columnWidth ?? 120;
+  const headerTextColor = tableConfig.headerTextColor ?? theme.colors.foreground;
+  const cellTextColor = tableConfig.cellTextColor ?? theme.colors.foreground;
+
   return {
     codeBlock: {
       backgroundColor: theme.colors.codeBackground,
@@ -268,21 +280,45 @@ export function getBlockStyles(theme: ThemeConfig) {
     },
     table: {
       marginBottom: theme.spacing.block,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderWidth: outerBorderWidth,
+      borderColor: tableBorderColor,
+      borderRadius: outerBorderWidth > 0 ? 8 : 0,
       overflow: 'hidden' as const,
     },
     tableHeader: {
-      backgroundColor: theme.colors.codeBackground,
-      padding: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      flexDirection: 'row' as const,
+      borderBottomWidth: headerBorderWidth,
+      borderBottomColor: tableBorderColor,
+      // No paddingVertical here - moved to cell content so separators extend full height
+    },
+    tableRow: {
+      flexDirection: 'row' as const,
+      borderBottomWidth: tableBorderWidth,
+      borderBottomColor: tableBorderColor,
+      // No paddingVertical here - moved to cell content so separators extend full height
     },
     tableCell: {
-      padding: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      // Use fixed width for consistent column alignment across all rows
+      width: columnWidth,
+      // Horizontal padding on cell, vertical padding on content (for full-height separators)
+      paddingHorizontal: cellPadding,
+    },
+    // Inner content padding - applied to text inside cells
+    tableCellContent: {
+      paddingVertical: cellPadding,
+    },
+    // Column separator style - applied to cells except the last one in a row
+    tableCellSeparator: {
+      borderRightWidth: columnSeparatorWidth,
+      borderRightColor: tableBorderColor,
+    },
+    // Header text style
+    tableHeaderText: {
+      color: headerTextColor,
+    },
+    // Cell text style
+    tableCellText: {
+      color: cellTextColor,
     },
   };
 }

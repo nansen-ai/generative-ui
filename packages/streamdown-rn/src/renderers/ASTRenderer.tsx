@@ -168,6 +168,7 @@ export const ASTRenderer: React.FC<ASTRendererProps> = ({
 
 /**
  * Render a single MDAST node
+ * @param textColorOverride - Optional color to override text color (used in tables)
  */
 function renderNode(
   node: Content,
@@ -176,11 +177,16 @@ function renderNode(
   isStreaming = false,
   selectable = false,
   onLinkPress?: (url: string) => void,
-  key?: string | number
+  key?: string | number,
+  textColorOverride?: string
 ): ReactNode {
   const styles = getTextStyles(theme);
   const blockStyles = getBlockStyles(theme);
   const hasLinks = nodeContainsLinks(node);
+  
+  // Helper to apply color override to a style
+  const withColorOverride = (style: object) => 
+    textColorOverride ? [style, { color: textColorOverride }] : style;
   
   switch (node.type) {
     // ========================================================================
@@ -250,29 +256,29 @@ function renderNode(
     
     case 'strong':
       return (
-        <SelectableText key={key} style={styles.bold} selectable={selectable}>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        <SelectableText key={key} style={withColorOverride(styles.bold)} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
     
     case 'emphasis':
       return (
-        <SelectableText key={key} style={styles.italic} selectable={selectable}>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        <SelectableText key={key} style={withColorOverride(styles.italic)} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
     
     case 'delete':
       // GFM strikethrough
       return (
-        <SelectableText key={key} style={styles.strikethrough} selectable={selectable}>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        <SelectableText key={key} style={withColorOverride(styles.strikethrough)} selectable={selectable}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
     
     case 'inlineCode':
       return (
-        <SelectableText key={key} style={styles.code} selectable={selectable}>
+        <SelectableText key={key} style={withColorOverride(styles.code)} selectable={selectable}>
           {node.value}
         </SelectableText>
       );
@@ -348,14 +354,15 @@ function renderChildren(
   componentRegistry?: ComponentRegistry,
   isStreaming = false,
   selectable = false,
-  onLinkPress?: (url: string) => void
+  onLinkPress?: (url: string) => void,
+  textColorOverride?: string
 ): ReactNode {
   if (!('children' in node) || !node.children) {
     return null;
   }
   
   return node.children.map((child, index) =>
-    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, index)
+    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, index, textColorOverride)
   );
 }
 
@@ -540,38 +547,44 @@ function renderTable(
   key?: string | number
 ): ReactNode {
   const styles = getTextStyles(theme);
+  const blockStyles = getBlockStyles(theme);
   const rows = node.children;
   
   if (rows.length === 0) return null;
   
   const headerRow = rows[0];
   const bodyRows = rows.slice(1);
+  const columnCount = headerRow.children.length;
+  
+  // Extract text colors for passing to nested renderNode calls
+  const headerTextColor = blockStyles.tableHeaderText.color;
+  const cellTextColor = blockStyles.tableCellText.color;
   
   return (
     <ScrollView 
       key={key} 
       horizontal 
       showsHorizontalScrollIndicator={true} 
-      style={{ marginBottom: theme.spacing.block }}
+      style={blockStyles.table}
     >
       <View>
         {/* Header */}
-        <View style={{ 
-          flexDirection: 'row', 
-          borderBottomWidth: 2, 
-          borderBottomColor: theme.colors.border,
-          paddingVertical: 8,
-          marginBottom: 8,
-        }}>
+        <View style={blockStyles.tableHeader}>
           {headerRow.children.map((cell, cellIndex) => {
             const cellHasLinks = nodeContainsLinks(cell as unknown as Content);
+            const isLastColumn = cellIndex === columnCount - 1;
             return (
-              <View key={cellIndex} style={{ minWidth: 100, paddingHorizontal: 8 }}>
-                <SelectableText style={[styles.bold, { fontSize: 14 }]} selectable={selectable} hasLinks={cellHasLinks}>
-                  {cell.children.map((child, childIndex) =>
-                    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex)
-                  )}
-                </SelectableText>
+              <View key={cellIndex} style={[
+                blockStyles.tableCell,
+                !isLastColumn && blockStyles.tableCellSeparator,
+              ]}>
+                <View style={blockStyles.tableCellContent}>
+                  <SelectableText style={[styles.bold, { fontSize: 14 }, blockStyles.tableHeaderText]} selectable={selectable} hasLinks={cellHasLinks}>
+                    {cell.children.map((child, childIndex) =>
+                      renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex, headerTextColor)
+                    )}
+                  </SelectableText>
+                </View>
               </View>
             );
           })}
@@ -579,21 +592,22 @@ function renderTable(
         
         {/* Body */}
         {bodyRows.map((row, rowIndex) => (
-          <View key={rowIndex} style={{ 
-            flexDirection: 'row',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            paddingVertical: 8,
-          }}>
+          <View key={rowIndex} style={blockStyles.tableRow}>
             {row.children.map((cell, cellIndex) => {
               const cellHasLinks = nodeContainsLinks(cell as unknown as Content);
+              const isLastColumn = cellIndex === columnCount - 1;
               return (
-                <View key={cellIndex} style={{ minWidth: 100, paddingHorizontal: 8 }}>
-                  <SelectableText style={styles.body} selectable={selectable} hasLinks={cellHasLinks}>
-                    {cell.children.map((child, childIndex) =>
-                      renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex)
-                    )}
-                  </SelectableText>
+                <View key={cellIndex} style={[
+                  blockStyles.tableCell,
+                  !isLastColumn && blockStyles.tableCellSeparator,
+                ]}>
+                  <View style={blockStyles.tableCellContent}>
+                    <SelectableText style={[styles.body, blockStyles.tableCellText]} selectable={selectable} hasLinks={cellHasLinks}>
+                      {cell.children.map((child, childIndex) =>
+                        renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, childIndex, cellTextColor)
+                      )}
+                    </SelectableText>
+                  </View>
                 </View>
               );
             })}
