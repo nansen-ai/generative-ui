@@ -326,6 +326,42 @@ describe('Setext Heading Prevention', () => {
     });
   });
   
+  describe('Ordered list start property', () => {
+    it('should preserve start number for ordered lists', () => {
+      // When markdown starts with "2.", the list should have start=2
+      const ast = parseMarkdown('2. Second item');
+      const list = ast.children[0] as List;
+
+      expect(list.type).toBe('list');
+      expect(list.ordered).toBe(true);
+      expect(list.start).toBe(2);
+    });
+
+    it('should parse each loose list item with correct start', () => {
+      // Each item separated by blank lines becomes its own list
+      // But each should preserve its start number
+      const items = ['1. First', '2. Second', '3. Third'];
+
+      items.forEach((item, index) => {
+        const ast = parseMarkdown(item);
+        const list = ast.children[0] as List;
+
+        expect(list.type).toBe('list');
+        expect(list.ordered).toBe(true);
+        expect(list.start).toBe(index + 1);
+      });
+    });
+
+    it('should handle list starting from arbitrary number', () => {
+      const ast = parseMarkdown('5. Fifth item\n6. Sixth item');
+      const list = ast.children[0] as List;
+
+      expect(list.ordered).toBe(true);
+      expect(list.start).toBe(5);
+      expect(list.children.length).toBe(2);
+    });
+  });
+
   describe('Mixed content should work correctly', () => {
     it('should handle ATX heading followed by list', () => {
       const content = '# Title\n\n- Item 1\n- Item 2';
