@@ -383,48 +383,5 @@ describe('Block Splitter', () => {
       expect(registry.activeBlock?.type).toBe('list');
     });
   });
-
-  describe('List handling with blank lines (loose lists)', () => {
-    it('should keep ordered list items together when separated by blank lines', () => {
-      // This is a "loose list" in markdown - items separated by blank lines
-      // They should still render as a single list with correct numbering
-      const input = `1. First item
-
-2. Second item
-
-3. Third item`;
-
-      const registry = processNewContent(INITIAL_REGISTRY, input);
-
-      // BUG: Currently this creates 3 separate list blocks, each with 1 item
-      // EXPECTED: Should create 1 list block with 3 items, OR preserve item numbers
-      console.log('Blocks:', registry.blocks.map(b => ({ type: b.type, content: b.content.slice(0, 50) })));
-      console.log('Active:', registry.activeBlock?.content.slice(0, 50));
-
-      // For now, document current (buggy) behavior:
-      // Each "X. Item" becomes a separate list block
-      // When rendered, remark parses each as a new list starting at 1
-    });
-
-    it('should handle ordered list with nested content and blank lines', () => {
-      const input = `**Top Results:**
-
-1. **Item One** - Description
-   - Detail A
-   - Detail B
-
-2. **Item Two** - Description
-   - Detail A
-
-3. **Item Three** - Description`;
-
-      const registry = processNewContent(INITIAL_REGISTRY, input);
-
-      console.log('Blocks:', registry.blocks.map(b => ({ type: b.type, content: b.content.slice(0, 80) })));
-      console.log('Active:', registry.activeBlock?.content.slice(0, 80));
-
-      // Document the splitting behavior
-    });
-  });
 });
 
