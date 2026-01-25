@@ -1,5 +1,11 @@
 # streamdown-rn
 
+## 0.2.4
+
+### Patch Changes
+
+- dbc86da: fix: numeric list display
+
 ## 0.2.3
 
 ### Patch Changes
