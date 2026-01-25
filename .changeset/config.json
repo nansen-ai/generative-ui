@@ -2,19 +2,16 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [
-    [
-      "@nansen-ai/streamdown-rn",
-      "galerie-rn",
-      "@darkresearch/debug-components",
-      "@darkresearch/debugger",
-      "@darkresearch/debugger-ios",
-      "@darkresearch/starter"
-    ]
-  ],
+  "fixed": [],
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "galerie-rn",
+    "@darkresearch/debug-components",
+    "@darkresearch/debugger",
+    "@darkresearch/debugger-ios",
+    "@darkresearch/starter"
+  ]
 }
