@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/debug-components",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Shared debug components for streamdown-rn testing and development",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
