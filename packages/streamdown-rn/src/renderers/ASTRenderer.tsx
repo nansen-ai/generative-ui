@@ -442,13 +442,15 @@ function renderList(
 ): ReactNode {
   const styles = getTextStyles(theme);
   const ordered = node.ordered ?? false;
-  
+  // Use the list's start property for ordered lists (handles loose lists split by blank lines)
+  const startNumber = node.start ?? 1;
+
   return (
     <View key={key} style={{ marginBottom: theme.spacing.block }}>
       {node.children.map((item, index) => (
         <View key={index} style={{ flexDirection: 'row', marginBottom: 4 }}>
           <SelectableText style={[styles.body, { width: 24 }]} selectable={selectable}>
-            {ordered ? `${index + 1}.` : '•'}
+            {ordered ? `${startNumber + index}.` : '•'}
           </SelectableText>
           <View style={{ flex: 1 }}>
             {item.children.map((child, childIndex) =>

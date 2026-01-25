@@ -372,11 +372,11 @@ describe('Block Splitter', () => {
     
     it('should detect list type from marker + space', () => {
       let registry = INITIAL_REGISTRY;
-      
+
       // - with space should be list
       registry = processNewContent(registry, '- ');
       expect(registry.activeBlock?.type).toBe('list');
-      
+
       // 1. with space should be ordered list
       registry = INITIAL_REGISTRY;
       registry = processNewContent(registry, '1. ');
