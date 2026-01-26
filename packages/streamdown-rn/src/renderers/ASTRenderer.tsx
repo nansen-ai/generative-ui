@@ -40,17 +40,19 @@ function nodeContainsLinks(node: Content): boolean {
 /**
  * SelectableText - A smart Text component that uses UITextView on iOS for proper
  * partial text selection, and falls back to regular Text on other platforms.
- * 
+ *
  * Note: UITextView doesn't support nested React Native components well,
- * so we use regular Text when the content contains links.
+ * so we use regular Text when the content contains links or for inline elements.
  */
-const SelectableText: React.FC<TextProps & { 
-  selectable?: boolean; 
+const SelectableText: React.FC<TextProps & {
+  selectable?: boolean;
   hasLinks?: boolean;
+  inline?: boolean;
   children?: React.ReactNode;
-}> = ({ selectable = false, children, onPress, hasLinks = false, ...props }) => {
-  // If content has links or onPress, use regular Text (UITextView doesn't support these)
-  if (hasLinks || onPress) {
+}> = ({ selectable = false, children, onPress, hasLinks = false, inline = false, ...props }) => {
+  // Inline elements are nested inside parent Text - must use Text (UITextView can't nest)
+  // Also use Text when content has links or onPress (UITextView doesn't support these)
+  if (inline || hasLinks || onPress) {
     return <Text {...props} selectable={selectable} onPress={onPress}>{children}</Text>;
   }
   // On iOS with selectable=true, use UITextView for proper partial text selection
@@ -256,29 +258,29 @@ function renderNode(
     
     case 'strong':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.bold)} selectable={selectable}>
+        <SelectableText key={key} style={withColorOverride(styles.bold)} selectable={selectable} inline>
           {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
-    
+
     case 'emphasis':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.italic)} selectable={selectable}>
+        <SelectableText key={key} style={withColorOverride(styles.italic)} selectable={selectable} inline>
           {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
-    
+
     case 'delete':
       // GFM strikethrough
       return (
-        <SelectableText key={key} style={withColorOverride(styles.strikethrough)} selectable={selectable}>
+        <SelectableText key={key} style={withColorOverride(styles.strikethrough)} selectable={selectable} inline>
           {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
         </SelectableText>
       );
-    
+
     case 'inlineCode':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.code)} selectable={selectable}>
+        <SelectableText key={key} style={withColorOverride(styles.code)} selectable={selectable} inline>
           {node.value}
         </SelectableText>
       );
@@ -327,7 +329,7 @@ function renderNode(
     
     case 'footnoteReference':
       return (
-        <SelectableText key={key} style={{ fontSize: 12 }} selectable={selectable}>
+        <SelectableText key={key} style={{ fontSize: 12 }} selectable={selectable} inline>
           [{node.identifier}]
         </SelectableText>
       );
