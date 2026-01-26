@@ -1,5 +1,11 @@
 # streamdown-rn
 
+## 0.2.5
+
+### Patch Changes
+
+- ab6b4aa: Fix inline display bug
+
 ## 0.2.4
 
 ### Patch Changes
