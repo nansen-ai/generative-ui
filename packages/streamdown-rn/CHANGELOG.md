@@ -1,5 +1,11 @@
 # streamdown-rn
 
+## 0.2.6
+
+### Patch Changes
+
+- ecd54fd: Pass hasLinks from parent
+
 ## 0.2.5
 
 ### Patch Changes
