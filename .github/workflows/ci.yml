@@ -3,11 +3,13 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
 
 jobs:
   test:
     name: Test & Type Check
     runs-on: ubuntu-latest
+    if: github.event.action != 'labeled' || github.event.label.name == 'run-ci'
     
     steps:
       - name: Checkout code

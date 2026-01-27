@@ -40,19 +40,17 @@ function nodeContainsLinks(node: Content): boolean {
 /**
  * SelectableText - A smart Text component that uses UITextView on iOS for proper
  * partial text selection, and falls back to regular Text on other platforms.
- *
+ * 
  * Note: UITextView doesn't support nested React Native components well,
- * so we use regular Text when the content contains links or for inline elements.
+ * so we use regular Text when the content contains links.
  */
-const SelectableText: React.FC<TextProps & {
-  selectable?: boolean;
+const SelectableText: React.FC<TextProps & { 
+  selectable?: boolean; 
   hasLinks?: boolean;
-  inline?: boolean;
   children?: React.ReactNode;
-}> = ({ selectable = false, children, onPress, hasLinks = false, inline = false, ...props }) => {
-  // Inline elements are nested inside parent Text - must use Text (UITextView can't nest)
-  // Also use Text when content has links or onPress (UITextView doesn't support these)
-  if (inline || hasLinks || onPress) {
+}> = ({ selectable = false, children, onPress, hasLinks = false, ...props }) => {
+  // If content has links or onPress, use regular Text (UITextView doesn't support these)
+  if (hasLinks || onPress) {
     return <Text {...props} selectable={selectable} onPress={onPress}>{children}</Text>;
   }
   // On iOS with selectable=true, use UITextView for proper partial text selection
@@ -171,6 +169,7 @@ export const ASTRenderer: React.FC<ASTRendererProps> = ({
 /**
  * Render a single MDAST node
  * @param textColorOverride - Optional color to override text color (used in tables)
+ * @param parentHasLinks - When true, parent has links so use Text instead of SelectableText (to avoid UITextView nesting)
  */
 function renderNode(
   node: Content,
@@ -180,11 +179,12 @@ function renderNode(
   selectable = false,
   onLinkPress?: (url: string) => void,
   key?: string | number,
-  textColorOverride?: string
+  textColorOverride?: string,
+  parentHasLinks = false
 ): ReactNode {
   const styles = getTextStyles(theme);
   const blockStyles = getBlockStyles(theme);
-  const hasLinks = nodeContainsLinks(node);
+  const hasLinks = parentHasLinks || nodeContainsLinks(node);
   
   // Helper to apply color override to a style
   const withColorOverride = (style: object) => 
@@ -198,15 +198,15 @@ function renderNode(
     case 'paragraph':
       return (
         <SelectableText key={key} style={styles.paragraph} selectable={selectable} hasLinks={hasLinks}>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, undefined, hasLinks)}
         </SelectableText>
       );
-    
+
     case 'heading':
       const headingStyle = styles[`heading${node.depth}` as keyof typeof styles];
       return (
         <SelectableText key={key} style={headingStyle} selectable={selectable} hasLinks={hasLinks}>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, undefined, hasLinks)}
         </SelectableText>
       );
     
@@ -224,7 +224,7 @@ function renderNode(
         <View key={key} style={{ flexDirection: 'row', marginBottom: 4 }}>
           <SelectableText style={styles.body} selectable={selectable}>• </SelectableText>
           <View style={{ flex: 1 }}>
-            {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+            {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, undefined, hasLinks)}
           </View>
         </View>
       );
@@ -258,29 +258,29 @@ function renderNode(
     
     case 'strong':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.bold)} selectable={selectable} inline>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
+        <SelectableText key={key} style={withColorOverride(styles.bold)} selectable={selectable} hasLinks={hasLinks}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride, hasLinks)}
         </SelectableText>
       );
 
     case 'emphasis':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.italic)} selectable={selectable} inline>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
+        <SelectableText key={key} style={withColorOverride(styles.italic)} selectable={selectable} hasLinks={hasLinks}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride, hasLinks)}
         </SelectableText>
       );
 
     case 'delete':
       // GFM strikethrough
       return (
-        <SelectableText key={key} style={withColorOverride(styles.strikethrough)} selectable={selectable} inline>
-          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride)}
+        <SelectableText key={key} style={withColorOverride(styles.strikethrough)} selectable={selectable} hasLinks={hasLinks}>
+          {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, textColorOverride, hasLinks)}
         </SelectableText>
       );
 
     case 'inlineCode':
       return (
-        <SelectableText key={key} style={withColorOverride(styles.code)} selectable={selectable} inline>
+        <SelectableText key={key} style={withColorOverride(styles.code)} selectable={selectable} hasLinks={hasLinks}>
           {node.value}
         </SelectableText>
       );
@@ -329,7 +329,7 @@ function renderNode(
     
     case 'footnoteReference':
       return (
-        <SelectableText key={key} style={{ fontSize: 12 }} selectable={selectable} inline>
+        <SelectableText key={key} style={{ fontSize: 12 }} selectable={selectable}>
           [{node.identifier}]
         </SelectableText>
       );
@@ -349,6 +349,7 @@ function renderNode(
 
 /**
  * Render children of a parent node
+ * @param parentHasLinks - When true, parent has links so children use Text instead of SelectableText
  */
 function renderChildren(
   node: Parent,
@@ -357,14 +358,15 @@ function renderChildren(
   isStreaming = false,
   selectable = false,
   onLinkPress?: (url: string) => void,
-  textColorOverride?: string
+  textColorOverride?: string,
+  parentHasLinks = false
 ): ReactNode {
   if (!('children' in node) || !node.children) {
     return null;
   }
-  
+
   return node.children.map((child, index) =>
-    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, index, textColorOverride)
+    renderNode(child as Content, theme, componentRegistry, isStreaming, selectable, onLinkPress, index, textColorOverride, parentHasLinks)
   );
 }
 
@@ -485,7 +487,7 @@ function renderListItemChild(
   if (node.type === 'paragraph') {
     return (
       <SelectableText key={key} style={[styles.body, { marginBottom: 0 }]} selectable={selectable} hasLinks={hasLinks}>
-        {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+        {renderChildren(node, theme, componentRegistry, isStreaming, selectable, onLinkPress, undefined, hasLinks)}
       </SelectableText>
     );
   }
@@ -527,7 +529,7 @@ function renderBlockquote(
           const hasLinks = nodeContainsLinks(child);
           return (
             <SelectableText key={index} style={[styles.body, { marginBottom: 0 }]} selectable={selectable} hasLinks={hasLinks}>
-              {renderChildren(child, theme, componentRegistry, isStreaming, selectable, onLinkPress)}
+              {renderChildren(child, theme, componentRegistry, isStreaming, selectable, onLinkPress, undefined, hasLinks)}
             </SelectableText>
           );
         }
